@@ -4,6 +4,13 @@
 
 El proyecto cuenta con un frontend basado en Next.js + Tailwind dentro de `web/`. La carpeta incluye configuración para TypeScript, ESLint y App Router lista para ampliar el sistema descrito en el documento del proyecto.
 
+### Stack objetivo
+
+- Frontend: Next.js + React + Tailwind CSS
+- Backend: Node.js (API Routes/Express lo cubren)
+- Base de datos: PostgreSQL (se integrará con Prisma/Drizzle)
+- Autenticación: JWT (con bcrypt para los hash)
+
 ```
 inventario-cibao/
 ├── Documento_Proyecto_Inventario_Cibao.docx
