@@ -24,7 +24,10 @@ inventario-cibao/
     ├── src/config/env.ts           # lectura de variables de entorno
     ├── src/db/pool.ts              # conexión Pool a PostgreSQL
     ├── src/routes/auth.ts          # endpoint POST /auth/login
-    └── src/index.ts                # servidor Express + /health
+    ├── src/docs/swagger.ts         # configuración OpenAPI
+    ├── src/index.ts                # servidor Express + /health
+    ├── db_schema.sql               # script SQL para crear tablas base
+    └── create_database.sql         # script opcional para crear usuario/base inv_cibao
 ```
 
 ## Backend (`server/`)
@@ -36,10 +39,24 @@ inventario-cibao/
    - `DATABASE_URL` apuntando a tu instancia PostgreSQL
    - `JWT_SECRET` con una clave segura
 4. Levanta el backend: `npm run dev`
-5. Verifica [http://localhost:4000/health](http://localhost:4000/health)
+5. Verifica [http://localhost:4000/health](http://localhost:4000/health) y la documentación [http://localhost:4000/docs](http://localhost:4000/docs)
 6. Para producción: `npm run build` y `npm start`
 
-> Asegúrate de crear las tablas y datos iniciales (roles/usuarios) en PostgreSQL para que `/auth/login` funcione.
+### Crear la base de datos
+
+1. Si aún no tienes base ni usuario, ejecuta (como superusuario `postgres`):  
+   ```bash
+   psql -f server/create_database.sql
+   ```  
+   Esto crea el usuario `inventario_user` (clave `inventario_password`) y la base `inv_cibao`.
+2. Ejecuta el script provisto con ese usuario:  
+   ```bash
+   psql \"postgresql://inventario_user:inventario_password@localhost:5432/inv_cibao\" -f server/db_schema.sql
+   ```  
+   Esto crea tablas, índices y roles iniciales.
+3. Inserta usuarios con contraseñas encriptadas (puedes usar `bcryptjs` desde Node o herramientas externas) para probar `/auth/login`.
+
+> Para crear las tablas y roles iniciales ejecuta `psql < server/db_schema.sql` (o el comando equivalente en tu cliente PostgreSQL) apuntando a la base definida en `DATABASE_URL`.
 
 ## Frontend (`web/`)
 
