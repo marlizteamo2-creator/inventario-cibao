@@ -1,0 +1,115 @@
+-- Inventario Cibao - Esquema inicial PostgreSQL
+-- Ejecuta este script en la base de datos definida por DATABASE_URL.
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Catálogos y tablas principales ---------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS roles (
+  id_rol UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre_rol VARCHAR(50) UNIQUE NOT NULL,
+  descripcion TEXT,
+  permisos JSONB DEFAULT '{}'::jsonb,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id_usuario UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(100) NOT NULL,
+  apellido VARCHAR(100) NOT NULL,
+  email VARCHAR(150) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  id_rol UUID NOT NULL REFERENCES roles(id_rol),
+  fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  activo BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS suplidores (
+  id_suplidor UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre_empresa VARCHAR(200) NOT NULL,
+  direccion VARCHAR(255),
+  telefono VARCHAR(20),
+  contacto_vendedor VARCHAR(150),
+  dias_credito INTEGER,
+  fecha_registro TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  activo BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS productos (
+  id_producto UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(200) NOT NULL,
+  descripcion TEXT,
+  precio_tienda NUMERIC(10,2) NOT NULL,
+  precio_ruta NUMERIC(10,2) NOT NULL,
+  stock_actual INTEGER NOT NULL DEFAULT 0,
+  stock_minimo INTEGER NOT NULL DEFAULT 0,
+  id_suplidor UUID REFERENCES suplidores(id_suplidor),
+  fecha_ingreso TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  disponible BOOLEAN NOT NULL DEFAULT TRUE,
+  motivo_no_disponible VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS salidas_alm (
+  id_salida UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_vendedor UUID NOT NULL REFERENCES usuarios(id_usuario),
+  fecha_salida TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  fecha_entrega DATE,
+  total NUMERIC(10,2) NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+  ticket VARCHAR(100) UNIQUE NOT NULL,
+  tipo_salida VARCHAR(20) NOT NULL DEFAULT 'tienda'
+);
+
+CREATE TABLE IF NOT EXISTS detalle_salidas (
+  id_detalle UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_salida UUID NOT NULL REFERENCES salidas_alm(id_salida) ON DELETE CASCADE,
+  id_producto UUID NOT NULL REFERENCES productos(id_producto),
+  cantidad INTEGER NOT NULL,
+  precio_unitario NUMERIC(10,2) NOT NULL,
+  subtotal NUMERIC(10,2) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS movimientos_inv (
+  id_movimiento UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_producto UUID NOT NULL REFERENCES productos(id_producto),
+  tipo_movimiento VARCHAR(50) NOT NULL,
+  cantidad INTEGER NOT NULL,
+  stock_anterior INTEGER NOT NULL,
+  stock_nuevo INTEGER NOT NULL,
+  id_usuario UUID NOT NULL REFERENCES usuarios(id_usuario),
+  fecha_movimiento TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  observacion TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pedidos_suplidores (
+  id_pedido UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_producto UUID NOT NULL REFERENCES productos(id_producto),
+  id_suplidor UUID NOT NULL REFERENCES suplidores(id_suplidor),
+  cantidad_solicitada INTEGER NOT NULL,
+  fecha_pedido TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  fecha_esperada DATE,
+  fecha_recibido DATE,
+  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+  id_usuario_solicita UUID NOT NULL REFERENCES usuarios(id_usuario)
+);
+
+-- Índices sugeridos -----------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_roles_nombre ON roles(nombre_rol);
+CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
+CREATE INDEX IF NOT EXISTS idx_productos_nombre ON productos(nombre);
+CREATE INDEX IF NOT EXISTS idx_salidas_fecha ON salidas_alm(fecha_salida);
+CREATE INDEX IF NOT EXISTS idx_salidas_vendedor ON salidas_alm(id_vendedor);
+CREATE INDEX IF NOT EXISTS idx_movimientos_producto ON movimientos_inv(id_producto);
+CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos_inv(fecha_movimiento);
+CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_esperada ON pedidos_suplidores(fecha_esperada);
+
+-- Datos base opcionales -------------------------------------------------------------
+INSERT INTO roles (nombre_rol, descripcion)
+VALUES
+  ('Vendedor Tienda', 'Gestiona ventas en tienda física'),
+  ('Vendedor Ruta', 'Gestiona ventas en ruta'),
+  ('Encargado de Tienda', 'Administra inventario y ventas'),
+  ('Gerente General', 'Acceso completo al sistema')
+ON CONFLICT (nombre_rol) DO NOTHING;

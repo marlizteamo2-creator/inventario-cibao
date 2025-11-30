@@ -1,5 +1,6 @@
-import { Router } from "express";
-import bcrypt from "bcrypt";
+import type { Request, Response } from "express";
+import express from "express";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { query } from "../db/pool";
 import { env } from "../config/env";
@@ -9,9 +10,64 @@ type LoginRequestBody = {
   password?: string;
 };
 
-const authRouter = Router();
+const authRouter = express.Router();
 
-authRouter.post("/login", async (req, res) => {
+/**
+ * @openapi
+ * /auth/login:
+ *   post:
+ *     summary: Iniciar sesión
+ *     tags:
+ *       - Autenticación
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: vendedor@electrocibao.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: secret123
+ *     responses:
+ *       200:
+ *         description: Sesión iniciada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     nombre:
+ *                       type: string
+ *                     apellido:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     rol:
+ *                       type: string
+ *       400:
+ *         description: Faltan datos
+ *       401:
+ *         description: Credenciales inválidas o usuario inactivo
+ *       500:
+ *         description: Error interno del servidor
+ */
+authRouter.post("/login", async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body as LoginRequestBody;
 

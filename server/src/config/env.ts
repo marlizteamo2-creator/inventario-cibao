@@ -1,6 +1,6 @@
-import dotenv from "dotenv";
+import { config as loadEnv } from "dotenv";
 
-dotenv.config();
+loadEnv();
 
 const requiredVars = ["DATABASE_URL", "JWT_SECRET"] as const;
 
