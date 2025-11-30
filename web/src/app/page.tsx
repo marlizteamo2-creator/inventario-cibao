@@ -7,15 +7,15 @@ export default function Home() {
         </p>
         <h1 className="text-4xl font-bold text-slate-900">Sistema de Inventario Web</h1>
         <p className="text-lg text-slate-600">
-          Base inicial lista para integrar autenticación, gestión de productos y reportes según la
-          especificación del proyecto.
+          Base inicial lista para integrarse con el backend Express externo y construir todas las
+          funciones del inventario descritas en el documento del proyecto.
         </p>
         <div className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm">
           <p className="text-sm font-semibold text-slate-700">Siguientes pasos sugeridos</p>
           <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-600">
-            <li>Configurar variables de entorno y conexión a PostgreSQL.</li>
-            <li>Agregar Prisma y los modelos de base de datos.</li>
-            <li>Crear rutas API para autenticación y CRUDs.</li>
+            <li>Configurar el backend Express (carpeta server) y la conexión a PostgreSQL.</li>
+            <li>Crear endpoints protegidos con JWT para usuarios, productos y movimientos.</li>
+            <li>Consumir la API desde este frontend usando React Query u otra librería.</li>
           </ul>
         </div>
       </div>

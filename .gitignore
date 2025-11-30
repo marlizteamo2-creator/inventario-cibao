@@ -1,1 +1,19 @@
 Documento_Proyecto_Inventario_Cibao.docx
+
+# Dependencias y builds
+node_modules
+web/node_modules
+server/node_modules
+
+# Builds/output
+web/.next
+web/out
+server/dist
+
+# Entornos
+.env
+.env.*
+web/.env
+web/.env.*
+server/.env
+server/.env.*
