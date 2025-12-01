@@ -2,10 +2,14 @@ import bcrypt from "bcryptjs";
 import { query, pool } from "../db/pool";
 
 const roles = [
-  { name: "Vendedor Tienda", description: "Gestiona ventas en tienda física" },
-  { name: "Vendedor Ruta", description: "Gestiona ventas en ruta" },
-  { name: "Encargado de Tienda", description: "Administra inventario y vendedores" },
-  { name: "Gerente General", description: "Acceso completo al sistema" }
+  {
+    name: "Administrador",
+    description: "Acceso a dashboard, reportes, inventario y configuración general"
+  },
+  {
+    name: "Vendedor",
+    description: "Gestiona consultas de productos, apartados y capturas de ventas en ruta o tienda"
+  }
 ];
 
 const adminUser = {
@@ -13,7 +17,7 @@ const adminUser = {
   lastName: "General",
   email: "gerente@electrocibao.com",
   password: "cibaoAdmin123",
-  roleName: "Gerente General"
+  roleName: "Administrador"
 };
 
 async function seed() {
