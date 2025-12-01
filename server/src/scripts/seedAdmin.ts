@@ -8,7 +8,7 @@ const roles = [
   },
   {
     name: "Vendedor",
-    description: "Gestiona consultas de productos, apartados y capturas de ventas en ruta o tienda"
+    description: "Gestiona consultas de productos, apartados y registro de salidas en ruta o tienda"
   }
 ];
 

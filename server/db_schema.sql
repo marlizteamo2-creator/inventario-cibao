@@ -108,8 +108,8 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_esperada ON pedidos_suplidores(fech
 -- Datos base opcionales -------------------------------------------------------------
 INSERT INTO roles (nombre_rol, descripcion)
 VALUES
-  ('Vendedor Tienda', 'Gestiona ventas en tienda física'),
-  ('Vendedor Ruta', 'Gestiona ventas en ruta'),
-  ('Encargado de Tienda', 'Administra inventario y ventas'),
+  ('Vendedor Tienda', 'Gestiona salidas en tienda física'),
+  ('Vendedor Ruta', 'Gestiona salidas en ruta'),
+  ('Encargado de Tienda', 'Administra inventario y salidas'),
   ('Gerente General', 'Acceso completo al sistema')
 ON CONFLICT (nombre_rol) DO NOTHING;
