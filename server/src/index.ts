@@ -9,6 +9,8 @@ import usersRouter from "./routes/users";
 import suppliersRouter from "./routes/suppliers";
 import productsRouter from "./routes/products";
 import salidasRouter from "./routes/salidas";
+import pedidosRouter from "./routes/pedidos";
+import movimientosRouter from "./routes/movimientos";
 
 const app = express();
 
@@ -25,6 +27,8 @@ app.use("/users", usersRouter);
 app.use("/suppliers", suppliersRouter);
 app.use("/products", productsRouter);
 app.use("/salidas", salidasRouter);
+app.use("/pedidos", pedidosRouter);
+app.use("/movimientos", movimientosRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error", err);

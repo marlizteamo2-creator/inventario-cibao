@@ -68,7 +68,13 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
   try {
     await client.query("BEGIN");
 
-    const { rows: productRows } = await client.query(
+    const { rows: productRows } = await client.query<{
+      id_producto: string;
+      nombre: string;
+      stock_actual: number;
+      precio_tienda: number;
+      precio_ruta: number;
+    }>(
       `SELECT id_producto, nombre, stock_actual, precio_tienda, precio_ruta
        FROM productos
        WHERE id_producto = ANY($1::uuid[])

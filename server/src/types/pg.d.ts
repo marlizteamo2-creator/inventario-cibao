@@ -12,9 +12,15 @@ declare module "pg" {
     values?: any[];
   }
 
+  export interface PoolClient {
+    query<R = any>(text: string | QueryConfig, values?: any[]): Promise<QueryResult<R>>;
+    release(err?: Error): void;
+  }
+
   export class Pool extends EventEmitter {
     constructor(config: { connectionString: string });
     query<R = any>(text: string | QueryConfig, values?: any[]): Promise<QueryResult<R>>;
+    connect(): Promise<PoolClient>;
     end(): Promise<void>;
   }
 }

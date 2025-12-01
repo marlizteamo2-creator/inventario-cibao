@@ -178,6 +178,64 @@ const options: Options = {
               }
             }
           }
+        },
+        Pedido: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            productoId: { type: "string", format: "uuid" },
+            producto: { type: "string" },
+            suplidorId: { type: "string", format: "uuid" },
+            suplidor: { type: "string" },
+            cantidadSolicitada: { type: "integer" },
+            fechaPedido: { type: "string", format: "date-time" },
+            fechaEsperada: { type: "string", format: "date" },
+            fechaRecibido: { type: "string", format: "date" },
+            estado: {
+              type: "string",
+              enum: ["pendiente", "recibido", "cancelado"]
+            },
+            usuarioId: { type: "string", format: "uuid" },
+            solicitadoPor: { type: "string" }
+          }
+        },
+        PedidoCreateInput: {
+          type: "object",
+          required: ["productId", "supplierId", "cantidadSolicitada"],
+          properties: {
+            productId: { type: "string", format: "uuid" },
+            supplierId: { type: "string", format: "uuid" },
+            cantidadSolicitada: { type: "integer" },
+            fechaEsperada: { type: "string", format: "date" }
+          }
+        },
+        PedidoUpdateInput: {
+          type: "object",
+          properties: {
+            estado: {
+              type: "string",
+              enum: ["pendiente", "recibido", "cancelado"]
+            },
+            cantidadSolicitada: { type: "integer" },
+            fechaEsperada: { type: "string", format: "date" },
+            fechaRecibido: { type: "string", format: "date" }
+          }
+        },
+        Movimiento: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            tipoMovimiento: { type: "string" },
+            cantidad: { type: "integer" },
+            stockAnterior: { type: "integer" },
+            stockNuevo: { type: "integer" },
+            fecha: { type: "string", format: "date-time" },
+            observacion: { type: "string" },
+            productoId: { type: "string", format: "uuid" },
+            producto: { type: "string" },
+            usuarioId: { type: "string", format: "uuid" },
+            usuario: { type: "string" }
+          }
         }
       }
     }
