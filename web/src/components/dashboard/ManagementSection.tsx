@@ -12,7 +12,7 @@ export default function ManagementSection({
   title: string;
   description: string;
   headers: string[];
-  form: ReactNode;
+  form?: ReactNode;
   rows: string[][];
   loading?: boolean;
 }) {

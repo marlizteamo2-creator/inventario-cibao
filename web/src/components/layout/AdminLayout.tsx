@@ -1,12 +1,15 @@
 "use client";
 
+import type { ComponentType } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import {
   BarChart3,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
+  History,
   LayoutDashboard,
   PackageCheck,
   Settings,
@@ -14,15 +17,24 @@ import {
   Truck
 } from "lucide-react";
 
-const NAV_ITEMS = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: ComponentType<{ size?: number }>;
+  roles?: string[];
+};
+
+const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Productos", href: "/products", icon: PackageCheck },
   { label: "Salidas", href: "/salidas", icon: Truck },
+  { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
   { label: "Inventario", href: "#", icon: Boxes },
   { label: "Suplidores", href: "/suppliers", icon: ClipboardList },
+  { label: "Movimientos", href: "/movimientos", icon: History, roles: ["Administrador"] },
   { label: "Reportes", href: "#", icon: BarChart3 },
-  { label: "Usuarios", href: "#", icon: UsersRound },
-  { label: "Configuración", href: "#", icon: Settings }
+  { label: "Usuarios", href: "#", icon: UsersRound, roles: ["Administrador"] },
+  { label: "Configuración", href: "#", icon: Settings, roles: ["Administrador"] }
 ];
 
 export default function AdminLayout({
@@ -42,7 +54,7 @@ export default function AdminLayout({
           <h2 className="text-xl font-semibold">Electro Cibao</h2>
         </div>
         <nav className="space-y-1 p-4">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => !item.roles || (role && item.roles.includes(role))).map((item) => (
             <Link
               key={item.label}
               href={item.href}

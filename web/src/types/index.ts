@@ -51,3 +51,32 @@ export type Salida = {
   vendedor: string;
   detalles: SalidaDetalle[];
 };
+
+export type Pedido = {
+  id: string;
+  productoId: string;
+  producto: string;
+  suplidorId: string;
+  suplidor: string;
+  cantidadSolicitada: number;
+  fechaPedido: string;
+  fechaEsperada: string | null;
+  fechaRecibido: string | null;
+  estado: string;
+  usuarioId: string;
+  solicitadoPor: string | null;
+};
+
+export type Movimiento = {
+  id: string;
+  tipoMovimiento: string;
+  cantidad: number;
+  stockAnterior: number;
+  stockNuevo: number;
+  fecha: string;
+  observacion?: string | null;
+  productoId: string;
+  producto: string;
+  usuarioId: string;
+  usuario: string;
+};

@@ -1,4 +1,4 @@
-import { ApiError, LoginResponse, Product, Supplier, Salida } from "@/types";
+import { ApiError, LoginResponse, Movimiento, Pedido, Product, Supplier, Salida } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -66,5 +66,52 @@ export async function createSalida(
     method: "POST",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchPedidos(token: string) {
+  return apiFetch<Pedido[]>("/pedidos", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createPedido(
+  token: string,
+  payload: { productId: string; supplierId: string; cantidadSolicitada: number; fechaEsperada?: string }
+) {
+  return apiFetch<Pedido>("/pedidos", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updatePedido(
+  token: string,
+  id: string,
+  payload: { estado?: "pendiente" | "recibido" | "cancelado"; cantidadSolicitada?: number; fechaEsperada?: string | null; fechaRecibido?: string | null }
+) {
+  return apiFetch<Pedido>(`/pedidos/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchMovimientos(
+  token: string,
+  filters?: { tipo?: string; productId?: string; userId?: string; from?: string; to?: string }
+) {
+  const params = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        params.append(key, value);
+      }
+    });
+  }
+  const query = params.size ? `?${params.toString()}` : "";
+  return apiFetch<Movimiento[]>(`/movimientos${query}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }

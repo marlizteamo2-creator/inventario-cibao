@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import ManagementSection from "@/components/dashboard/ManagementSection";
 import Input from "@/components/ui/Input";
@@ -13,14 +13,15 @@ import { createSupplier, fetchSuppliers } from "@/lib/api";
 import { Building2, PhoneCall, UserCheck, UserX } from "lucide-react";
 
 export default function SuppliersPage() {
-  const { token } = useAuth();
+  const { token, role } = useAuth();
   const { hydrated } = useRequireAuth();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ nombreEmpresa: "", contactoVendedor: "", telefono: "" });
   const [message, setMessage] = useState<string | null>(null);
+  const isAdmin = role === "Administrador";
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     try {
@@ -30,16 +31,16 @@ export default function SuppliersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (token) {
       void load();
     }
-  }, [token]);
+  }, [token, load]);
 
   const handleSubmit = async () => {
-    if (!token) return;
+    if (!token || !isAdmin) return;
     if (!form.nombreEmpresa) {
       return setMessage("Ingresa el nombre de la empresa");
     }
@@ -96,26 +97,28 @@ export default function SuppliersPage() {
         description="Registra empresas y contactos para vincular compras."
         headers={["Empresa", "Contacto", "Teléfono", "Estado"]}
         form={
-          <div className="grid gap-3 lg:grid-cols-3">
-            <Input
-              placeholder="Nombre empresa"
-              value={form.nombreEmpresa}
-              onChange={(e) => setForm((prev) => ({ ...prev, nombreEmpresa: e.target.value }))}
-            />
-            <Input
-              placeholder="Contacto"
-              value={form.contactoVendedor}
-              onChange={(e) => setForm((prev) => ({ ...prev, contactoVendedor: e.target.value }))}
-            />
-            <Input
-              placeholder="Teléfono"
-              value={form.telefono}
-              onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
-            />
-            <Button onClick={handleSubmit} className="lg:col-span-3">
-              Guardar suplidor
-            </Button>
-          </div>
+          isAdmin ? (
+            <div className="grid gap-3 lg:grid-cols-3">
+              <Input
+                placeholder="Nombre empresa"
+                value={form.nombreEmpresa}
+                onChange={(e) => setForm((prev) => ({ ...prev, nombreEmpresa: e.target.value }))}
+              />
+              <Input
+                placeholder="Contacto"
+                value={form.contactoVendedor}
+                onChange={(e) => setForm((prev) => ({ ...prev, contactoVendedor: e.target.value }))}
+              />
+              <Input
+                placeholder="Teléfono"
+                value={form.telefono}
+                onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
+              />
+              <Button onClick={handleSubmit} className="lg:col-span-3">
+                Guardar suplidor
+              </Button>
+            </div>
+          ) : undefined
         }
         rows={suppliers.map((s) => [
           s.nombreEmpresa,

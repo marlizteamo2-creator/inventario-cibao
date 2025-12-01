@@ -39,10 +39,6 @@ export default function SalidasPage() {
     }
   }, [token, hydrated]);
 
-  if (!hydrated) {
-    return null;
-  }
-
   const addLineItem = (productId: string, cantidad: number) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
@@ -79,6 +75,10 @@ export default function SalidasPage() {
   const totalItems = useMemo(() => lineItems.reduce((sum, item) => sum + item.cantidad, 0), [lineItems]);
 
   const canCreate = role === "Administrador" || role === "Vendedor";
+
+  if (!hydrated) {
+    return null;
+  }
 
   return (
     <AdminLayout active="Salidas">
