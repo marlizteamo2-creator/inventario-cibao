@@ -79,5 +79,11 @@ inventario-cibao/
   - `POST /users`: crea usuarios con nombre, apellido, email, password y rol.
   - `PATCH /users/:id`: actualiza datos, rol, estado o contraseña.
   - `DELETE /users/:id`: solo el Gerente General puede eliminar usuarios (no puede eliminar a otro gerente).
+- `/suppliers`:
+  - `GET /suppliers`: listado filtrable por búsqueda y estado. Disponible para cualquier usuario autenticado.
+  - `POST /suppliers`, `PATCH /suppliers/:id`, `DELETE /suppliers/:id`: administración de suplidores (Encargado/Gerente).
+- `/products`:
+  - `GET /products`: listado filtrable por texto, suplidor o disponibilidad (vendedores y administradores).
+  - `POST /products`, `PATCH /products/:id`, `DELETE /products/:id`: administración de inventario (Encargado/Gerente).
 
 Incluye el header `Authorization: Bearer <token>` en cada petición protegida. Añadiremos más módulos (productos, inventario, reportes) siguiendo el documento del proyecto.
