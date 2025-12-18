@@ -203,11 +203,34 @@ pedidosRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReques
       return res.status(400).json({ message: "Suplidor no existe" });
     }
 
+    const normalizedFecha = normalizeDateInput(fechaEsperada);
+
+    const { rows: duplicateRows } = await query(
+      `SELECT id_pedido
+       FROM pedidos_suplidores
+       WHERE id_producto = $1
+         AND id_suplidor = $2
+         AND cantidad_solicitada = $3
+         AND (
+           (fecha_esperada IS NULL AND $4::date IS NULL) OR
+           (fecha_esperada = $4::date)
+         )
+         AND estado = 'pendiente'
+       LIMIT 1`,
+      [productId, supplierId, cantidadSolicitada, normalizedFecha ?? null]
+    );
+
+    if (duplicateRows.length) {
+      return res.status(409).json({
+        message: "Ya existe un pedido pendiente con los mismos datos. Edita el que ya tienes registrado."
+      });
+    }
+
     const { rows } = await query(
       `INSERT INTO pedidos_suplidores (id_producto, id_suplidor, cantidad_solicitada, fecha_esperada, estado, id_usuario_solicita)
        VALUES ($1, $2, $3, $4, 'pendiente', $5)
        RETURNING id_pedido`,
-      [productId, supplierId, cantidadSolicitada, fechaEsperada ?? null, tokenUser.id]
+      [productId, supplierId, cantidadSolicitada, normalizedFecha ?? null, tokenUser.id]
     );
 
     const pedido = await fetchPedidoById(rows[0].id_pedido);

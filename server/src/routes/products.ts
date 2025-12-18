@@ -236,7 +236,12 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
     );
 
     res.status(201).json(mapProduct(rows[0]));
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === "23505") {
+      return res.status(409).json({
+        message: "Ya existe un producto con la misma combinación de tipo, marca, modelo y precios. Edita el existente."
+      });
+    }
     console.error("Error creando producto", error);
     res.status(500).json({ message: "Error interno" });
   }
@@ -401,7 +406,12 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
     );
 
     res.json(mapProduct(rows[0]));
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === "23505") {
+      return res.status(409).json({
+        message: "Ya existe un producto con la misma combinación de tipo, marca, modelo y precios."
+      });
+    }
     console.error("Error actualizando producto", error);
     res.status(500).json({ message: "Error interno" });
   }
