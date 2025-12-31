@@ -179,6 +179,57 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
   }
 });
 
+salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params ?? {};
+    if (!id) {
+      return res.status(400).json({ message: "ID requerido" });
+    }
+
+    const { estado, fechaEntrega } = req.body ?? {};
+    if (estado === undefined && fechaEntrega === undefined) {
+      return res.status(400).json({ message: "No hay campos para actualizar" });
+    }
+
+    const updates: string[] = [];
+    const params: Array<any> = [];
+
+    if (estado !== undefined) {
+      const estadosDisponibles = await getActiveStates();
+      if (!estadosDisponibles.includes(estado)) {
+        return res.status(400).json({ message: "Estado de salida no válido" });
+      }
+      updates.push(`estado = $${updates.length + 1}`);
+      params.push(estado);
+    }
+
+    if (fechaEntrega !== undefined) {
+      const parsedDate = fechaEntrega ? new Date(fechaEntrega) : null;
+      if (fechaEntrega && Number.isNaN(parsedDate?.getTime() ?? Number.NaN)) {
+        return res.status(400).json({ message: "Fecha de entrega no válida" });
+      }
+      updates.push(`fecha_entrega = $${updates.length + 1}`);
+      params.push(parsedDate);
+    }
+
+    params.push(id);
+
+    const { rowCount } = await query(
+      `UPDATE salidas_alm SET ${updates.join(", ")} WHERE id_salida = $${params.length}`,
+      params
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ message: "Salida no encontrada" });
+    }
+
+    res.json({ message: "Salida actualizada" });
+  } catch (error) {
+    console.error("Error actualizando salida", error);
+    res.status(500).json({ message: "Error interno" });
+  }
+});
+
 /**
  * @openapi
  * /salidas:
