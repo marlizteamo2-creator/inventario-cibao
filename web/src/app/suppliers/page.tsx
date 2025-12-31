@@ -164,6 +164,14 @@ export default function SuppliersPage() {
     return null;
   }
 
+  if (!isAdmin) {
+    return (
+      <AdminLayout active="Suplidores">
+        <p className="text-sm text-slate-500">Solo los administradores pueden consultar y gestionar los suplidores.</p>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout active="Suplidores">
       {message && <p className="text-sm text-slate-500">{message}</p>}

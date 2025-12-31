@@ -236,6 +236,18 @@ export async function fetchSalidas(token: string) {
   });
 }
 
+export async function updateSalida(
+  token: string,
+  id: string,
+  payload: { estado?: string; fechaEntrega?: string | null }
+) {
+  return apiFetch<void>(`/salidas/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function fetchSalidaStatuses(token: string) {
   return apiFetch<SalidaStatus[]>("/salida-statuses", {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }

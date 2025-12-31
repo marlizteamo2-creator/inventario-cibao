@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { fetchProducts, fetchSalidas } from "@/lib/api";
 import { Product, Salida } from "@/types";
 import { AlertTriangle, DollarSign, PackageCheck, ShoppingBag, Truck, UsersRound } from "lucide-react";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -91,13 +92,34 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
     ...pendingSalidas.slice(0, 2).map((s) => ({ type: "pendiente", text: `Ticket ${s.ticket} pendiente de entrega` }))
   ];
 
-  const recent = salidas.slice(0, 5);
+  const [filterEstado, setFilterEstado] = useState("");
+  const estadoOptions = useMemo(() => {
+    const unique = Array.from(new Set(salidas.map((salida) => salida.estado)));
+    return [{ value: "", label: "Todos los estados" }, ...unique.map((estado) => ({ value: estado, label: estado }))];
+  }, [salidas]);
+  const recent = useMemo(
+    () =>
+      salidas
+        .filter((salida) => (filterEstado ? salida.estado === filterEstado : true))
+        .slice(0, 5),
+    [salidas, filterEstado]
+  );
 
   return (
     <div className="space-y-6">
       <StatsGrid stats={stats} />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Salidas recientes" loading={loading}>
+          <div className="mb-4 flex flex-col gap-1">
+            <label className="text-xs uppercase text-slate-400">Filtrar por estado</label>
+            <SearchableSelect
+              className="w-56"
+              value={filterEstado}
+              onChange={(value) => setFilterEstado(value)}
+              options={estadoOptions}
+              placeholder="Todos los estados"
+            />
+          </div>
           <div className="overflow-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs uppercase text-slate-400">

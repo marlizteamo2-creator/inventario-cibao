@@ -59,7 +59,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
   { label: "Inventario", href: "#", icon: Boxes },
-  { label: "Suplidores", href: "/suppliers", icon: ClipboardList },
+  { label: "Suplidores", href: "/suppliers", icon: ClipboardList, roles: ["Administrador"] },
   { label: "Movimientos", href: "/movimientos", icon: History, roles: ["Administrador"] },
   { label: "Reportes", href: "#", icon: BarChart3 },
   { label: "Usuarios", href: "#", icon: UsersRound, roles: ["Administrador"] },

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { useAuth } from "@/context/AuthContext";
-import { createSalida, fetchProducts, fetchSalidas, fetchSalidaStatuses } from "@/lib/api";
+import { createSalida, fetchProducts, fetchSalidas, fetchSalidaStatuses, updateSalida } from "@/lib/api";
 import { Product, Salida, SalidaStatus } from "@/types";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -27,9 +27,13 @@ export default function SalidasPage() {
   const [salidas, setSalidas] = useState<Salida[]>([]);
   const [statuses, setStatuses] = useState<SalidaStatus[]>([]);
   const [form, setForm] = useState({ tipoSalida: "tienda", fechaEntrega: "", estado: "", productId: "", cantidad: 1 });
-  const [lineItems, setLineItems] = useState<Array<{ productId: string; nombre: string; cantidad: number }>>([]);
-  const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+const [lineItems, setLineItems] = useState<Array<{ productId: string; nombre: string; cantidad: number }>>([]);
+const [message, setMessage] = useState<string | null>(null);
+const [loading, setLoading] = useState(false);
+const [filterEstado, setFilterEstado] = useState("");
+const [editingSalida, setEditingSalida] = useState<Salida | null>(null);
+const [editEstado, setEditEstado] = useState("");
+const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -107,7 +111,26 @@ export default function SalidasPage() {
     }
   };
 
-  const recentRows = salidas.slice(0, 10).map((s) => [s.ticket, s.vendedor, s.estado, `RD$ ${currencyFormatter.format(s.total)}`]);
+  const canCreate = role === "Administrador" || role === "Vendedor";
+
+  const filteredSalidas = useMemo(
+    () => salidas.filter((salida) => (filterEstado ? salida.estado === filterEstado : true)),
+    [salidas, filterEstado]
+  );
+
+  const recentRows = filteredSalidas.slice(0, 10).map((s) => [
+    s.ticket,
+    s.vendedor,
+    s.estado,
+    `RD$ ${currencyFormatter.format(s.total)}`,
+    canCreate ? (
+      <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => openEditSalida(s)}>
+        Editar
+      </Button>
+    ) : (
+      "—"
+    )
+  ]);
 
   const totalItems = useMemo(() => lineItems.reduce((sum, item) => sum + item.cantidad, 0), [lineItems]);
   const productOptions = useMemo(
@@ -124,8 +147,46 @@ export default function SalidasPage() {
     () => statuses.filter((status) => status.activo).map((status) => ({ value: status.nombre, label: status.nombre })),
     [statuses]
   );
+  const allStatusOptions = useMemo(
+    () => statuses.map((status) => ({ value: status.nombre, label: status.nombre })),
+    [statuses]
+  );
+  const filterStatusOptions = useMemo(() => {
+    const unique = Array.from(new Set(salidas.map((salida) => salida.estado)));
+    return [{ value: "", label: "Todos los estados" }, ...unique.map((estado) => ({ value: estado, label: estado }))];
+  }, [salidas]);
 
-  const canCreate = role === "Administrador" || role === "Vendedor";
+
+  const openEditSalida = (salida: Salida) => {
+    setEditingSalida(salida);
+    setEditEstado(salida.estado);
+  };
+
+  const closeEditSalida = () => {
+    setEditingSalida(null);
+    setEditEstado("");
+    setSavingEdit(false);
+  };
+
+  const handleSaveSalidaEstado = async () => {
+    if (!token || !editingSalida) return;
+    if (!editEstado) {
+      setMessage("Selecciona un estado");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await updateSalida(token, editingSalida.id, { estado: editEstado });
+      setMessage("Estado de salida actualizado");
+      closeEditSalida();
+      const updated = await fetchSalidas(token);
+      setSalidas(updated);
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   if (!hydrated) {
     return null;
@@ -238,10 +299,71 @@ export default function SalidasPage() {
       <section className="rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Salidas Registradas</h2>
         <p className="text-sm text-slate-500">Últimos movimientos registrados</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs uppercase text-slate-400">Filtrar por estado</label>
+            <SearchableSelect
+              className="w-60"
+              value={filterEstado}
+              onChange={(value) => setFilterEstado(value)}
+              options={filterStatusOptions}
+              placeholder="Todos los estados"
+            />
+          </div>
+          {filterEstado && (
+            <Button variant="subtle" className="border border-slate-200" onClick={() => setFilterEstado("")}>
+              Limpiar filtro
+            </Button>
+          )}
+        </div>
         <div className="mt-4">
-          <DataTable headers={["Ticket", "Vendedor", "Estado", "Monto"]} rows={recentRows} loading={loading} />
+          <DataTable
+            headers={["Ticket", "Vendedor", "Estado", "Monto", "Acciones"]}
+            rows={recentRows}
+            loading={loading}
+          />
         </div>
       </section>
+      {editingSalida && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Actualizar estado</p>
+                <h3 className="text-lg font-semibold text-slate-900">{editingSalida.ticket}</h3>
+                <p className="text-xs text-slate-500">{editingSalida.vendedor}</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:text-slate-700"
+                onClick={closeEditSalida}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="text-xs uppercase text-slate-500">Estado</label>
+                <SearchableSelect
+                  className="mt-1"
+                  value={editEstado}
+                  onChange={(next) => setEditEstado(next)}
+                  options={allStatusOptions}
+                  placeholder="Selecciona estado"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="subtle" className="border border-slate-200" type="button" onClick={closeEditSalida}>
+                Cancelar
+              </Button>
+              <Button variant="accent" type="button" onClick={handleSaveSalidaEstado} disabled={savingEdit}>
+                {savingEdit ? "Guardando..." : "Guardar cambios"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
