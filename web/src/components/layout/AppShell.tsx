@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useAuth } from "@/context/AuthContext";
 import Button from "@/components/ui/Button";
 import MainLayout from "@/components/layout/MainLayout";
@@ -8,7 +9,7 @@ import MainLayout from "@/components/layout/MainLayout";
 export default function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { userName, logout } = useAuth();
 
-  const navItems = [
+  const navItems: Array<{ label: string; href: Route }> = [
     { label: "Suplidores", href: "/suppliers" },
     { label: "Productos", href: "/products" }
   ];

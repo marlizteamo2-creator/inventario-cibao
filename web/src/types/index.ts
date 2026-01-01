@@ -3,6 +3,8 @@ export type LoginResponse = {
   user: {
     id: string;
     nombre: string;
+    apellido?: string | null;
+    email: string;
     rol: string;
   };
 };

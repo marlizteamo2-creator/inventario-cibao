@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import clsx from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -24,12 +25,12 @@ import {
 
 type NavItem = {
   label: string;
-  href?: string;
+  href?: Route;
   icon?: LucideIcon;
   roles?: string[];
   children?: Array<{
     label: string;
-    href: string;
+    href: Route;
     roles?: string[];
     icon?: LucideIcon;
   }>;
@@ -58,12 +59,12 @@ const NAV_ITEMS: NavItem[] = [
     children: [{ label: "Estados", href: "/salidas/estados", roles: ["Administrador"], icon: Truck }]
   },
   { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
-  { label: "Inventario", href: "#", icon: Boxes },
+  { label: "Inventario", icon: Boxes },
   { label: "Suplidores", href: "/suppliers", icon: ClipboardList, roles: ["Administrador"] },
   { label: "Movimientos", href: "/movimientos", icon: History, roles: ["Administrador"] },
-  { label: "Reportes", href: "#", icon: BarChart3 },
-  { label: "Usuarios", href: "#", icon: UsersRound, roles: ["Administrador"] },
-  { label: "Configuración", href: "#", icon: Settings, roles: ["Administrador"] }
+  { label: "Reportes", icon: BarChart3 },
+  { label: "Usuarios", icon: UsersRound, roles: ["Administrador"] },
+  { label: "Configuración", icon: Settings, roles: ["Administrador"] }
 ];
 
 export default function AdminLayout({
@@ -116,13 +117,20 @@ export default function AdminLayout({
                         isParentActive ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5"
                       )}
                     >
-                      <Link
-                        href={item.href ?? "#"}
-                        className="flex flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-sm font-medium"
-                      >
-                        {item.icon && <item.icon size={18} />}
-                        {item.label}
-                      </Link>
+                      {item.href ? (
+                        <Link
+                          href={item.href}
+                          className="flex flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-sm font-medium"
+                        >
+                          {item.icon && <item.icon size={18} />}
+                          {item.label}
+                        </Link>
+                      ) : (
+                        <span className="flex flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-sm font-medium">
+                          {item.icon && <item.icon size={18} />}
+                          {item.label}
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="rounded-full p-1 transition hover:bg-white/10"
