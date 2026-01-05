@@ -1,1 +1,1 @@
-"declare module 'nodemailer';\n"
+declare module "nodemailer";
