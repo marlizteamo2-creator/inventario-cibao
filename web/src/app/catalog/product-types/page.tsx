@@ -16,6 +16,7 @@ import {
   updateProductType,
 } from "@/lib/api";
 import { Layers, FileText, Tag, X } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 
 const initialForm = {
   id: null as string | null,
@@ -29,10 +30,18 @@ export default function ProductTypesPage() {
   const [types, setTypes] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useState("");
   const [showFormModal, setShowFormModal] = useState(false);
   const isEditing = Boolean(form.id);
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   const loadTypes = useCallback(async () => {
     if (!token) return;
@@ -41,7 +50,7 @@ export default function ProductTypesPage() {
       const data = await fetchProductTypes(token);
       setTypes(data);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -66,7 +75,7 @@ export default function ProductTypesPage() {
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.nombre.trim()) {
-      setMessage("El nombre es obligatorio");
+      showAlert("El nombre es obligatorio", "error");
       return;
     }
 
@@ -76,19 +85,19 @@ export default function ProductTypesPage() {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || null,
         });
-        setMessage("Tipo actualizado");
+        showAlert("Tipo actualizado", "success");
       } else {
         await createProductType(token, {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined,
         });
-        setMessage("Tipo creado");
+        showAlert("Tipo creado", "success");
       }
       setForm(initialForm);
       await loadTypes();
       closeFormModal();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -113,13 +122,13 @@ export default function ProductTypesPage() {
     }
     try {
       await deleteProductType(token, type.id);
-      setMessage("Tipo eliminado");
+      showAlert("Tipo eliminado", "success");
       if (form.id === type.id) {
         setForm(initialForm);
       }
       await loadTypes();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -174,7 +183,13 @@ export default function ProductTypesPage() {
 
   return (
     <AdminLayout active="Tipos de producto">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       <StatsGrid
         className="mt-6 gap-6"
         itemClassName="p-5"

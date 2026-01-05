@@ -123,3 +123,23 @@ export type SalidaStatus = {
   descripcion?: string | null;
   activo: boolean;
 };
+
+export type User = {
+  id: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  rol: string;
+  activo: boolean;
+  fechaCreacion: string;
+};
+
+export type Role = {
+  id: string;
+  nombre: string;
+};
+
+export type UserCreationResponse = {
+  user: User;
+  emailSent: boolean;
+};

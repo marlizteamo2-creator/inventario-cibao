@@ -64,7 +64,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Movimientos", href: "/movimientos", icon: History, roles: ["Administrador"] },
   { label: "Reportes", href: "/reports", icon: BarChart3, roles: ["Administrador"] },
   { label: "Usuarios", href: "/users", icon: UsersRound, roles: ["Administrador"] },
-  { label: "Configuración", href: "/settings", icon: Settings, roles: ["Administrador"] }
+  { label: "Configuración", href: "/settings", icon: Settings }
 ];
 
 export default function AdminLayout({

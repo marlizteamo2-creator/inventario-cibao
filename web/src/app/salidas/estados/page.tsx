@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import { X } from "lucide-react";
 import { createSalidaStatus, deleteSalidaStatus, fetchSalidaStatuses, updateSalidaStatus } from "@/lib/api";
 import { SalidaStatus } from "@/types";
+import Alert from "@/components/ui/Alert";
 
 const initialForm = {
   id: null as string | null,
@@ -23,8 +24,16 @@ export default function SalidaStatusesPage() {
   const [statuses, setStatuses] = useState<SalidaStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [form, setForm] = useState(initialForm);
   const [showFormModal, setShowFormModal] = useState(false);
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   const loadStatuses = useCallback(async () => {
     if (!token) return;
@@ -33,7 +42,7 @@ export default function SalidaStatusesPage() {
       const data = await fetchSalidaStatuses(token);
       setStatuses(data);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -48,7 +57,7 @@ export default function SalidaStatusesPage() {
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.nombre.trim()) {
-      setMessage("Ingresa el nombre del estado");
+      showAlert("Ingresa el nombre del estado", "error");
       return;
     }
     try {
@@ -58,20 +67,20 @@ export default function SalidaStatusesPage() {
           descripcion: form.descripcion.trim() || null,
           activo: form.activo
         });
-        setMessage("Estado actualizado");
+        showAlert("Estado actualizado", "success");
       } else {
         await createSalidaStatus(token, {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined,
           activo: form.activo
         });
-        setMessage("Estado creado");
+        showAlert("Estado creado", "success");
       }
       setForm(initialForm);
       setShowFormModal(false);
       await loadStatuses();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -92,13 +101,13 @@ export default function SalidaStatusesPage() {
     }
     try {
       await deleteSalidaStatus(token, status.id);
-      setMessage("Estado eliminado");
+      showAlert("Estado eliminado", "success");
       if (form.id === status.id) {
         setForm(initialForm);
       }
       await loadStatuses();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -116,7 +125,13 @@ export default function SalidaStatusesPage() {
 
   return (
     <AdminLayout active="Estados de salidas">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       <div className="rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>

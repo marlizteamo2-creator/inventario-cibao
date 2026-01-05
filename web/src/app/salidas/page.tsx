@@ -16,6 +16,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import DataTable from "@/components/ui/DataTable";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import Alert from "@/components/ui/Alert";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -55,12 +56,20 @@ export default function SalidasPage() {
     Array<{ productId: string; nombre: string; cantidad: number }>
   >([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [loading, setLoading] = useState(false);
   const [filterEstado, setFilterEstado] = useState("");
   const [editingSalida, setEditingSalida] = useState<Salida | null>(null);
   const [editEstado, setEditEstado] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -74,7 +83,7 @@ export default function SalidasPage() {
         setProducts(productsData);
         setSalidas(salidasData);
       } catch (error) {
-        setMessage((error as Error).message);
+        showAlert((error as Error).message, "error");
       } finally {
         setLoading(false);
       }
@@ -89,7 +98,7 @@ export default function SalidasPage() {
       const data = await fetchSalidaStatuses(token);
       setStatuses(data);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   }, [token]);
 
@@ -136,10 +145,10 @@ export default function SalidasPage() {
   const handleSubmit = async () => {
     if (!token) return;
     if (lineItems.length === 0) {
-      return setMessage("Agrega al menos un producto a la salida");
+      return showAlert("Agrega al menos un producto a la salida", "error");
     }
     if (!form.estado) {
-      return setMessage("Selecciona el estado de la salida");
+      return showAlert("Selecciona el estado de la salida", "error");
     }
     try {
       await createSalida(token, {
@@ -152,13 +161,13 @@ export default function SalidasPage() {
           cantidad: item.cantidad,
         })),
       });
-      setMessage("Salida registrada");
+      showAlert("Salida registrada", "success");
       resetCreateForm();
       setShowCreateModal(false);
       const updated = await fetchSalidas(token);
       setSalidas(updated);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -242,18 +251,18 @@ export default function SalidasPage() {
   const handleSaveSalidaEstado = async () => {
     if (!token || !editingSalida) return;
     if (!editEstado) {
-      setMessage("Selecciona un estado");
+      showAlert("Selecciona un estado", "error");
       return;
     }
     setSavingEdit(true);
     try {
       await updateSalida(token, editingSalida.id, { estado: editEstado });
-      setMessage("Estado de salida actualizado");
+      showAlert("Estado de salida actualizado", "success");
       closeEditSalida();
       const updated = await fetchSalidas(token);
       setSalidas(updated);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setSavingEdit(false);
     }
@@ -265,7 +274,13 @@ export default function SalidasPage() {
 
   return (
     <AdminLayout active="Salidas">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       {canCreate && (
         <div className="mb-4 flex justify-end">
           <Button variant="accent" onClick={() => setShowCreateModal(true)}>

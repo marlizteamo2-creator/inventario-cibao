@@ -11,6 +11,7 @@ import useRequireAuth from "@/hooks/useRequireAuth";
 import { Brand } from "@/types";
 import { createBrand, deleteBrand, fetchBrands, updateBrand } from "@/lib/api";
 import { Tag, BookOpen, Building2, X } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 
 const initialForm = {
   id: null as string | null,
@@ -24,10 +25,18 @@ export default function BrandsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useState("");
   const [showFormModal, setShowFormModal] = useState(false);
   const isEditing = Boolean(form.id);
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   const loadBrands = useCallback(async () => {
     if (!token) return;
@@ -36,7 +45,7 @@ export default function BrandsPage() {
       const data = await fetchBrands(token);
       setBrands(data);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -61,7 +70,7 @@ export default function BrandsPage() {
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.nombre.trim()) {
-      setMessage("La marca necesita un nombre");
+      showAlert("La marca necesita un nombre", "error");
       return;
     }
 
@@ -71,19 +80,19 @@ export default function BrandsPage() {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || null
         });
-        setMessage("Marca actualizada");
+        showAlert("Marca actualizada", "success");
       } else {
         await createBrand(token, {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined
         });
-        setMessage("Marca creada");
+        showAlert("Marca creada", "success");
       }
       setForm(initialForm);
       await loadBrands();
       closeFormModal();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -99,13 +108,13 @@ export default function BrandsPage() {
     }
     try {
       await deleteBrand(token, brand.id);
-      setMessage("Marca eliminada");
+      showAlert("Marca eliminada", "success");
       if (form.id === brand.id) {
         setForm(initialForm);
       }
       await loadBrands();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -156,7 +165,13 @@ export default function BrandsPage() {
 
   return (
     <AdminLayout active="Marcas">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       <StatsGrid
         className="mt-6 gap-6"
         itemClassName="p-5"

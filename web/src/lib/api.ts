@@ -9,7 +9,10 @@ import {
   Salida,
   Brand,
   Model,
-  SalidaStatus
+  SalidaStatus,
+  User,
+  Role,
+  UserCreationResponse
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -274,6 +277,56 @@ export async function updateSalidaStatus(
     method: "PATCH",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchUsers(token: string) {
+  return apiFetch<User[]>("/users", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createUser(
+  token: string,
+  payload: { nombre: string; apellido: string; email: string; password: string; roleName: string }
+) {
+  return apiFetch<UserCreationResponse>("/users", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchRoles(token: string) {
+  return apiFetch<Role[]>("/roles", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updateOwnPassword(token: string, payload: { newPassword: string }) {
+  return apiFetch<{ message: string }>("/users/me/password", {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateUser(
+  token: string,
+  id: string,
+  payload: { nombre?: string; apellido?: string; roleName?: string; activo?: boolean; password?: string }
+) {
+  return apiFetch<User>(`/users/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteUser(token: string, id: string) {
+  return apiFetch<void>(`/users/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
   });
 }
 

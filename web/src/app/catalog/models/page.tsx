@@ -12,6 +12,7 @@ import useRequireAuth from "@/hooks/useRequireAuth";
 import { Brand, Model, ProductType } from "@/types";
 import { createModel, deleteModel, fetchBrands, fetchModels, fetchProductTypes, updateModel } from "@/lib/api";
 import { PackageSearch, Factory, Tag, Filter, X } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 
 const initialForm = {
   id: null as string | null,
@@ -31,9 +32,17 @@ export default function ModelsPage() {
   const [filterType, setFilterType] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [form, setForm] = useState(initialForm);
   const [showFormModal, setShowFormModal] = useState(false);
   const isEditing = Boolean(form.id);
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   const loadBrands = useCallback(async () => {
     if (!token) return;
@@ -41,7 +50,7 @@ export default function ModelsPage() {
       const data = await fetchBrands(token);
       setBrands(data);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   }, [token]);
 
@@ -51,7 +60,7 @@ export default function ModelsPage() {
       const data = await fetchProductTypes(token);
       setProductTypes(data);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   }, [token]);
 
@@ -63,7 +72,7 @@ export default function ModelsPage() {
         const data = await fetchModels(token, filters);
         setModels(data);
       } catch (error) {
-        setMessage((error as Error).message);
+        showAlert((error as Error).message, "error");
       } finally {
         setLoading(false);
       }
@@ -100,15 +109,15 @@ export default function ModelsPage() {
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.brandId) {
-      setMessage("Selecciona la marca del modelo");
+      showAlert("Selecciona la marca del modelo", "error");
       return;
     }
     if (!form.typeId) {
-      setMessage("Selecciona el tipo de producto");
+      showAlert("Selecciona el tipo de producto", "error");
       return;
     }
     if (!form.nombre.trim()) {
-      setMessage("El nombre es obligatorio");
+      showAlert("El nombre es obligatorio", "error");
       return;
     }
 
@@ -120,7 +129,7 @@ export default function ModelsPage() {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || null
         });
-        setMessage("Modelo actualizado");
+        showAlert("Modelo actualizado", "success");
       } else {
         await createModel(token, {
           brandId: form.brandId,
@@ -128,7 +137,7 @@ export default function ModelsPage() {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined
         });
-        setMessage("Modelo creado");
+        showAlert("Modelo creado", "success");
       }
       setForm(initialForm);
       await loadModels({
@@ -137,7 +146,7 @@ export default function ModelsPage() {
       });
       closeFormModal();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -159,7 +168,7 @@ export default function ModelsPage() {
     }
     try {
       await deleteModel(token, model.id);
-      setMessage("Modelo eliminado");
+      showAlert("Modelo eliminado", "success");
       if (form.id === model.id) {
         setForm(initialForm);
       }
@@ -168,7 +177,7 @@ export default function ModelsPage() {
         typeId: filterType || undefined
       });
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -212,7 +221,13 @@ export default function ModelsPage() {
 
   return (
     <AdminLayout active="Modelos">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       <StatsGrid
         className="mt-6 gap-6"
         itemClassName="p-5"

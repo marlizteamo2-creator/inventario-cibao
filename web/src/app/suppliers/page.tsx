@@ -11,6 +11,7 @@ import useRequireAuth from "@/hooks/useRequireAuth";
 import { Supplier } from "@/types";
 import { createSupplier, fetchSuppliers, updateSupplier } from "@/lib/api";
 import { Building2, Edit2, PhoneCall, Scale, UserCheck, X } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 
 const initialForm = {
   nombreEmpresa: "",
@@ -27,7 +28,7 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(initialForm);
-  const [message, setMessage] = useState<string | null>(null);
+  const [alert, setAlert] = useState<{ message: string; variant: "info" | "success" | "error" } | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [editForm, setEditForm] = useState(initialForm);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -39,7 +40,7 @@ export default function SuppliersPage() {
     try {
       setSuppliers(await fetchSuppliers(token));
     } catch (error) {
-      setMessage((error as Error).message);
+      setAlert({ message: (error as Error).message, variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,8 @@ export default function SuppliersPage() {
   const handleSubmit = async () => {
     if (!token || !isAdmin) return;
     if (!form.nombreEmpresa.trim()) {
-      return setMessage("Ingresa el nombre de la empresa");
+      setAlert({ message: "Ingresa el nombre de la empresa", variant: "error" });
+      return;
     }
     try {
       await createSupplier(token, {
@@ -86,11 +88,11 @@ export default function SuppliersPage() {
         diasCredito: form.diasCredito ? Number(form.diasCredito) : undefined,
         activo: form.activo === "true"
       });
-      setMessage("Suplidor registrado");
+      setAlert({ message: "Suplidor registrado", variant: "success" });
       closeCreateModal();
       await load();
     } catch (error) {
-      setMessage((error as Error).message);
+      setAlert({ message: (error as Error).message, variant: "error" });
     }
   };
 
@@ -113,7 +115,8 @@ export default function SuppliersPage() {
   const handleEditSubmit = async () => {
     if (!token || !editingSupplier) return;
     if (!editForm.nombreEmpresa.trim()) {
-      return setMessage("Ingresa el nombre de la empresa");
+      setAlert({ message: "Ingresa el nombre de la empresa", variant: "error" });
+      return;
     }
     try {
       await updateSupplier(token, editingSupplier.id, {
@@ -124,11 +127,11 @@ export default function SuppliersPage() {
         diasCredito: editForm.diasCredito ? Number(editForm.diasCredito) : undefined,
         activo: editForm.activo === "true"
       });
-      setMessage("Cambios guardados");
+      setAlert({ message: "Cambios guardados", variant: "success" });
       setEditingSupplier(null);
       await load();
     } catch (error) {
-      setMessage((error as Error).message);
+      setAlert({ message: (error as Error).message, variant: "error" });
     }
   };
 
@@ -174,7 +177,13 @@ export default function SuppliersPage() {
 
   return (
     <AdminLayout active="Suplidores">
-      {message && <p className="text-sm text-slate-500">{message}</p>}
+      {alert && (
+        <div className="mb-4">
+          <Alert variant={alert.variant} onDismiss={() => setAlert(null)}>
+            {alert.message}
+          </Alert>
+        </div>
+      )}
       <StatsGrid
         className="mt-6 gap-6"
         itemClassName="p-5"

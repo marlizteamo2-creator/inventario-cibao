@@ -9,6 +9,7 @@ import Input from "@/components/ui/Input";
 import { Movimiento, Product } from "@/types";
 import { fetchMovimientos, fetchProducts } from "@/lib/api";
 import { Activity, ArrowDownToLine, ArrowUpToLine, ArrowUpDown } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 
 const tipoOptions = [
   { value: "todos", label: "Todos los movimientos" },
@@ -32,9 +33,17 @@ export default function MovimientosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [filters, setFilters] = useState({ tipo: "todos", productId: "" });
   const [search, setSearch] = useState("");
   const isAdmin = role === "Administrador";
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   const loadMovimientos = useCallback(async () => {
     if (!token || !isAdmin) return;
@@ -45,9 +54,9 @@ export default function MovimientosPage() {
         productId: filters.productId || undefined
       });
       setMovimientos(data);
-      setMessage(null);
+      showAlert(null);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
       setMovimientos([]);
     } finally {
       setLoading(false);
@@ -66,7 +75,7 @@ export default function MovimientosPage() {
       try {
         setProducts(await fetchProducts(token));
       } catch (error) {
-        setMessage((error as Error).message);
+        showAlert((error as Error).message, "error");
       }
     };
     if (hydrated && token && isAdmin) {
@@ -139,7 +148,13 @@ export default function MovimientosPage() {
 
   return (
     <AdminLayout active="Movimientos">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       <StatsGrid stats={stats} />
       <section className="mt-6 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

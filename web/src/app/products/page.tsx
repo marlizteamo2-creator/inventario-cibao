@@ -20,6 +20,7 @@ import {
   fetchModels,
 } from "@/lib/api";
 import { Layers, PackageOpen, TrendingDown, X } from "lucide-react";
+import Alert from "@/components/ui/Alert";
 
 const initialFormState = {
   nombre: "",
@@ -47,7 +48,14 @@ export default function ProductsPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [alert, setAlert] = useState<{ message: string; variant: "info" | "success" | "error" } | null>(null);
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    if (!text) {
+      setAlert(null);
+      return;
+    }
+    setAlert({ message: text, variant });
+  };
   const [form, setForm] = useState(initialFormState);
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -64,7 +72,7 @@ export default function ProductsPage() {
     try {
       setProducts(await fetchProducts(token));
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -81,7 +89,7 @@ export default function ProductsPage() {
         }, {} as Record<string, string>)
       );
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   }, [token]);
 
@@ -112,7 +120,7 @@ export default function ProductsPage() {
           setSuppliers(suppliersData as Supplier[]);
         }
       } catch (error) {
-        setMessage((error as Error).message);
+        showAlert((error as Error).message, "error");
       }
     };
     void loadAuxData();
@@ -131,7 +139,7 @@ export default function ProductsPage() {
         });
         setModels(data);
       } catch (error) {
-        setMessage((error as Error).message);
+        showAlert((error as Error).message, "error");
       }
     };
     void loadModelsForBrand();
@@ -216,26 +224,24 @@ export default function ProductsPage() {
   const handleSubmit = async () => {
     if (!token || !isAdmin) return;
     if (!form.nombre.trim()) {
-      return setMessage("Ingresa el nombre del producto");
+      return showAlert("Ingresa el nombre del producto", "error");
     }
     if (!form.tipoId.trim() || !form.marcaId.trim()) {
-      return setMessage("Selecciona tipo y marca del producto");
+      return showAlert("Selecciona tipo y marca del producto", "error");
     }
     if (!form.modeloId && !form.modeloNombre.trim()) {
-      return setMessage("Selecciona un modelo o escribe uno nuevo");
+      return showAlert("Selecciona un modelo o escribe uno nuevo", "error");
     }
     if (!form.precioTienda || !form.precioRuta) {
-      return setMessage("Define los precios de tienda y ruta");
+      return showAlert("Define los precios de tienda y ruta", "error");
     }
     const parsedStockActual = Number(form.stockActual || 0);
     const parsedStockUnavailable = Number(form.stockNoDisponible || 0);
     if (parsedStockUnavailable < 0) {
-      return setMessage("Las unidades inactivas no pueden ser negativas");
+      return showAlert("Las unidades inactivas no pueden ser negativas", "error");
     }
     if (parsedStockUnavailable > parsedStockActual) {
-      return setMessage(
-        "Las unidades inactivas no pueden superar el stock actual"
-      );
+      return showAlert("Las unidades inactivas no pueden superar el stock actual", "error");
     }
 
     const payload = {
@@ -259,17 +265,17 @@ export default function ProductsPage() {
     try {
       if (editingProductId) {
         await updateProduct(token, editingProductId, payload);
-        setMessage("Producto actualizado correctamente");
+        showAlert("Producto actualizado correctamente", "success");
       } else {
         await createProduct(token, payload);
-        setMessage("Producto registrado correctamente");
+        showAlert("Producto registrado correctamente", "success");
       }
       resetFormState();
       setShowFormModal(false);
       await load();
       await loadModelNames();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     }
   };
 
@@ -714,7 +720,13 @@ export default function ProductsPage() {
 
   return (
     <AdminLayout active="Productos">
-      {message && <p className="text-sm text-slate-500">{message}</p>}
+      {alert && (
+        <div className="mb-4">
+          <Alert variant={alert.variant} onDismiss={() => setAlert(null)}>
+            {alert.message}
+          </Alert>
+        </div>
+      )}
       {detailModal}
       <StatsGrid
         stats={[

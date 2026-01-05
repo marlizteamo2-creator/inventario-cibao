@@ -10,6 +10,7 @@ import Button from "@/components/ui/Button";
 import { ClipboardCheck, Clock4, CheckCircle2, XCircle } from "lucide-react";
 import { Pedido, Product, Supplier } from "@/types";
 import { createPedido, fetchPedidos, fetchProducts, fetchSuppliers, updatePedido } from "@/lib/api";
+import Alert from "@/components/ui/Alert";
 
 const statusClasses: Record<string, string> = {
   pendiente: "bg-amber-100 text-amber-700",
@@ -32,7 +33,15 @@ export default function PedidosPage() {
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [form, setForm] = useState({ productId: "", supplierId: "", cantidad: 1, fechaEsperada: "" });
+
+  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+    setMessage(text);
+    if (text) {
+      setMessageVariant(variant);
+    }
+  };
 
   const loadData = useCallback(async () => {
     if (!token) return;
@@ -47,7 +56,7 @@ export default function PedidosPage() {
       setProducts(productsData);
       setSuppliers(suppliersData);
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -98,13 +107,13 @@ export default function PedidosPage() {
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.productId || !form.supplierId) {
-      return setMessage("Selecciona un producto y suplidor");
+      return showAlert("Selecciona un producto y suplidor", "error");
     }
     if (form.cantidad <= 0) {
-      return setMessage("La cantidad debe ser mayor a 0");
+      return showAlert("La cantidad debe ser mayor a 0", "error");
     }
     setSaving(true);
-    setMessage(null);
+    showAlert(null);
     try {
       await createPedido(token, {
         productId: form.productId,
@@ -113,10 +122,10 @@ export default function PedidosPage() {
         fechaEsperada: form.fechaEsperada || undefined
       });
       setForm({ productId: "", supplierId: "", cantidad: 1, fechaEsperada: "" });
-      setMessage("Pedido registrado correctamente");
+      showAlert("Pedido registrado correctamente", "success");
       await loadData();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setSaving(false);
     }
@@ -125,13 +134,13 @@ export default function PedidosPage() {
   const handleUpdate = async (id: string, estado: "recibido" | "cancelado") => {
     if (!token) return;
     setUpdatingId(id);
-    setMessage(null);
+    showAlert(null);
     try {
       await updatePedido(token, id, { estado });
-      setMessage(`Pedido marcado como ${estado}`);
+      showAlert(`Pedido marcado como ${estado}`, "success");
       await loadData();
     } catch (error) {
-      setMessage((error as Error).message);
+      showAlert((error as Error).message, "error");
     } finally {
       setUpdatingId(null);
     }
@@ -143,7 +152,13 @@ export default function PedidosPage() {
 
   return (
     <AdminLayout active="Pedidos">
-      {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
+      {message && (
+        <div className="mb-4">
+          <Alert variant={messageVariant} onDismiss={() => showAlert(null)}>
+            {message}
+          </Alert>
+        </div>
+      )}
       <StatsGrid stats={stats} />
       {canManage && (
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
