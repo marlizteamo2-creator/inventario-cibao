@@ -128,13 +128,13 @@ export default function MovimientosPage() {
         icon: ArrowDownToLine,
         iconClassName: "bg-rose-50 text-rose-600",
       },
-      // {
-      //   label: "Entradas",
-      //   value: entradas.toString(),
-      //   caption: "Recargas de stock",
-      //   icon: ArrowUpToLine,
-      //   iconClassName: "bg-emerald-50 text-emerald-600",
-      // },
+      {
+        label: "Entradas",
+        value: entradas.toString(),
+        caption: "Recargas de stock",
+        icon: ArrowUpToLine,
+        iconClassName: "bg-emerald-50 text-emerald-600",
+      },
       // {
       //   label: "Variación neta",
       //   value: `${neto >= 0 ? "+" : ""}${neto}`,
@@ -156,13 +156,17 @@ export default function MovimientosPage() {
     );
   }, [movimientos, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredMovimientos.length / pageSize));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredMovimientos.length / pageSize)
+  );
   const currentPage = Math.min(page, totalPages);
   const paginatedMovimientos = filteredMovimientos.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
-  const pageStart = filteredMovimientos.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageStart =
+    filteredMovimientos.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const pageEnd = Math.min(filteredMovimientos.length, currentPage * pageSize);
 
   if (!hydrated) {
@@ -306,11 +310,14 @@ export default function MovimientosPage() {
               </table>
               <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <p className="text-xs text-slate-500">
-                  Mostrando {pageStart}-{pageEnd} de {filteredMovimientos.length} movimientos
+                  Mostrando {pageStart}-{pageEnd} de{" "}
+                  {filteredMovimientos.length} movimientos
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                   <div className="flex items-center gap-2">
-                    <label className="text-xs uppercase text-slate-400">Por página</label>
+                    <label className="text-xs uppercase text-slate-400">
+                      Por página
+                    </label>
                     <select
                       className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-1 text-sm text-slate-800"
                       value={pageSize}
@@ -339,7 +346,9 @@ export default function MovimientosPage() {
                     </span>
                     <button
                       className="rounded-2xl border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-600 disabled:opacity-40"
-                      onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                      onClick={() =>
+                        setPage((prev) => Math.min(totalPages, prev + 1))
+                      }
                       disabled={currentPage === totalPages}
                     >
                       Siguiente

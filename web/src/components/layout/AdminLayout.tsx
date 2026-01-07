@@ -80,7 +80,19 @@ const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
-  { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
+  {
+    label: "Pedidos",
+    href: "/pedidos",
+    icon: ClipboardCheck,
+    children: [
+      {
+        label: "Estados de pedidos",
+        href: "/pedidos/estados",
+        roles: ["Administrador"],
+        icon: ClipboardCheck,
+      },
+    ],
+  },
   { label: "Inventario", href: "/inventory", icon: Boxes },
   {
     label: "Suplidores",

@@ -90,8 +90,15 @@ export type Salida = {
 
 export type Pedido = {
   id: string;
-  productoId: string;
+  productoId?: string | null;
   producto: string;
+  productoNombreReferencia?: string | null;
+  tipoId: string;
+  tipoNombre?: string | null;
+  marcaId?: string | null;
+  marcaNombre?: string | null;
+  modeloId?: string | null;
+  modeloNombre?: string | null;
   suplidorId: string;
   suplidor: string;
   cantidadSolicitada: number;
@@ -101,6 +108,14 @@ export type Pedido = {
   estado: string;
   usuarioId: string;
   solicitadoPor: string | null;
+};
+
+export type PedidoStatus = {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  activo: boolean;
+  posicion?: number;
 };
 
 export type Movimiento = {

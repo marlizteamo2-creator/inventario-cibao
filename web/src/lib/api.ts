@@ -3,6 +3,7 @@ import {
   LoginResponse,
   Movimiento,
   Pedido,
+  PedidoStatus,
   Product,
   ProductType,
   Supplier,
@@ -337,6 +338,42 @@ export async function deleteSalidaStatus(token: string, id: string) {
   });
 }
 
+export async function fetchPedidoStatuses(token: string) {
+  return apiFetch<PedidoStatus[]>("/pedido-statuses", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createPedidoStatus(
+  token: string,
+  payload: { nombre: string; descripcion?: string; activo?: boolean; posicion?: number }
+) {
+  return apiFetch<PedidoStatus>("/pedido-statuses", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updatePedidoStatus(
+  token: string,
+  id: string,
+  payload: { nombre?: string; descripcion?: string | null; activo?: boolean; posicion?: number }
+) {
+  return apiFetch<PedidoStatus>(`/pedido-statuses/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deletePedidoStatus(token: string, id: string) {
+  return apiFetch<void>(`/pedido-statuses/${id}`, {
+    method: "DELETE",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
 export async function createSalida(
   token: string,
   payload: {
@@ -379,7 +416,16 @@ export async function downloadSalidasReport(token: string, start: string, end: s
 
 export async function createPedido(
   token: string,
-  payload: { productId: string; supplierId: string; cantidadSolicitada: number; fechaEsperada?: string }
+  payload: {
+    productId?: string;
+    supplierId: string;
+    cantidadSolicitada: number;
+    fechaEsperada?: string;
+    productTypeId: string;
+    brandId: string;
+    modelId: string;
+    productNameHint?: string;
+  }
 ) {
   return apiFetch<Pedido>("/pedidos", {
     method: "POST",

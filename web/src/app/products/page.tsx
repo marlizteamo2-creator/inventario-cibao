@@ -18,6 +18,7 @@ import {
   fetchProductTypes,
   fetchBrands,
   fetchModels,
+  createBrand
 } from "@/lib/api";
 import { Layers, PackageOpen, TrendingDown, X } from "lucide-react";
 import Alert from "@/components/ui/Alert";
@@ -47,6 +48,7 @@ export default function ProductsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
+  const [newBrandName, setNewBrandName] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{ message: string; variant: "info" | "success" | "error" } | null>(null);
   const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
@@ -173,6 +175,7 @@ export default function ProductsPage() {
   const resetFormState = () => {
     setForm(initialFormState);
     setEditingProductId(null);
+    setNewBrandName("");
   };
 
   const openCreateModal = () => {
@@ -197,6 +200,7 @@ export default function ProductsPage() {
       suplidorId: product.suplidorId ?? "",
       disponible: product.disponible ? "disponible" : "no-disponible",
     });
+    setNewBrandName("");
     setShowFormModal(true);
   };
 
@@ -226,8 +230,23 @@ export default function ProductsPage() {
     if (!form.nombre.trim()) {
       return showAlert("Ingresa el nombre del producto", "error");
     }
-    if (!form.tipoId.trim() || !form.marcaId.trim()) {
-      return showAlert("Selecciona tipo y marca del producto", "error");
+    const trimmedTipo = form.tipoId.trim();
+    let targetMarcaId = form.marcaId.trim();
+    const trimmedNewBrand = newBrandName.trim();
+    if (!targetMarcaId && trimmedNewBrand) {
+      try {
+        const brand = await createBrand(token, { nombre: trimmedNewBrand });
+        setBrands((prev) => [...prev, brand]);
+        targetMarcaId = brand.id;
+        setForm((prev) => ({ ...prev, marcaId: brand.id }));
+        setNewBrandName("");
+      } catch (error) {
+        showAlert((error as Error).message, "error");
+        return;
+      }
+    }
+    if (!trimmedTipo || !targetMarcaId) {
+      return showAlert("Selecciona o registra la marca del producto", "error");
     }
     if (!form.modeloId && !form.modeloNombre.trim()) {
       return showAlert("Selecciona un modelo o escribe uno nuevo", "error");
@@ -247,8 +266,8 @@ export default function ProductsPage() {
     const payload = {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim() || undefined,
-      tipoId: form.tipoId.trim(),
-      marcaId: form.marcaId.trim(),
+      tipoId: trimmedTipo,
+      marcaId: targetMarcaId,
       modeloId: form.modeloId || undefined,
       modeloNombre: !form.modeloId
         ? form.modeloNombre.trim() || undefined
@@ -531,6 +550,13 @@ export default function ProductsPage() {
                 })),
               ]}
               placeholder="Selecciona marca"
+              disabled={!form.tipoId}
+            />
+            <Input
+              className="mt-2"
+              placeholder="Nueva marca (se registrará al guardar)"
+              value={newBrandName}
+              onChange={(e) => setNewBrandName(e.target.value)}
               disabled={!form.tipoId}
             />
           </div>
