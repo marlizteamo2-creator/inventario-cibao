@@ -437,7 +437,7 @@ export async function createPedido(
 export async function updatePedido(
   token: string,
   id: string,
-  payload: { estado?: "pendiente" | "recibido" | "cancelado"; cantidadSolicitada?: number; fechaEsperada?: string | null; fechaRecibido?: string | null }
+  payload: { estado?: string; cantidadSolicitada?: number; fechaEsperada?: string | null; fechaRecibido?: string | null }
 ) {
   return apiFetch<Pedido>(`/pedidos/${id}`, {
     method: "PATCH",
