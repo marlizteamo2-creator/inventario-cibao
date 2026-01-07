@@ -25,6 +25,24 @@ import {
 } from "@/lib/api";
 import Alert from "@/components/ui/Alert";
 
+const normalizePedidoEstado = (value?: string | null) => (value ?? "").trim().toLowerCase();
+const isRecibidoPedidoEstado = (estado?: string | null) => {
+  const normalized = normalizePedidoEstado(estado);
+  return Boolean(normalized && normalized.includes("recib"));
+};
+const isCanceladoPedidoEstado = (estado?: string | null) => {
+  const normalized = normalizePedidoEstado(estado);
+  return Boolean(normalized && normalized.includes("cancel"));
+};
+const isPendientePedidoEstado = (estado?: string | null) => {
+  const normalized = normalizePedidoEstado(estado);
+  if (!normalized) return false;
+  if (isRecibidoPedidoEstado(estado) || isCanceladoPedidoEstado(estado)) {
+    return false;
+  }
+  return true;
+};
+
 const statusClasses: Record<string, string> = {
   pendiente: "bg-amber-100 text-amber-700",
   recibido: "bg-emerald-100 text-emerald-700",
@@ -116,11 +134,11 @@ export default function PedidosPage() {
   const canManage = role === "Administrador";
 
   const stats = useMemo(() => {
-    const pending = pedidos.filter((p) => p.estado === "pendiente").length;
-    const received = pedidos.filter((p) => p.estado === "recibido").length;
-    const canceled = pedidos.filter((p) => p.estado === "cancelado").length;
+    const pending = pedidos.filter((p) => isPendientePedidoEstado(p.estado)).length;
+    const received = pedidos.filter((p) => isRecibidoPedidoEstado(p.estado)).length;
+    const canceled = pedidos.filter((p) => isCanceladoPedidoEstado(p.estado)).length;
     const overdue = pedidos.filter(
-      (p) => p.estado === "pendiente" && p.fechaEsperada && new Date(p.fechaEsperada) < new Date()
+      (p) => isPendientePedidoEstado(p.estado) && p.fechaEsperada && new Date(p.fechaEsperada) < new Date()
     ).length;
 
     return [
@@ -262,7 +280,7 @@ export default function PedidosPage() {
   const filteredPedidos = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return pedidos.filter((pedido) => {
-      if (!showRecibidos && !filterEstado && pedido.estado === "recibido") {
+      if (!showRecibidos && !filterEstado && isRecibidoPedidoEstado(pedido.estado)) {
         return false;
       }
       if (filterEstado && pedido.estado !== filterEstado) {

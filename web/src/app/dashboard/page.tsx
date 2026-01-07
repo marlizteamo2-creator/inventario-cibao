@@ -13,6 +13,18 @@ import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatTipoVenta = (tipo?: string) => (tipo === "credito" ? "Crédito" : "Contado");
+const normalizeEstadoSalida = (value?: string | null) => (value ?? "").trim().toLowerCase();
+const isPendingSalidaEstado = (estado?: string | null) => {
+  const normalized = normalizeEstadoSalida(estado);
+  if (!normalized) return false;
+  if (normalized.includes("cancel")) {
+    return false;
+  }
+  if (normalized.includes("entregad")) {
+    return false;
+  }
+  return true;
+};
 
 export default function DashboardPage() {
   const { hydrated } = useRequireAuth();
@@ -73,7 +85,7 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
       }, 0);
   }, [salidas]);
 
-  const pendingSalidas = salidas.filter((s) => s.estado === "pendiente");
+  const pendingSalidas = salidas.filter((s) => isPendingSalidaEstado(s.estado));
 
   const stats = [
     { label: "Productos en stock", value: products.length.toString(), caption: "Actualizado online", icon: PackageCheck },
