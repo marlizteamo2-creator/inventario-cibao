@@ -109,6 +109,15 @@ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS pedido_estados (
+  id_estado UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(50) UNIQUE NOT NULL,
+  descripcion TEXT,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  posicion INTEGER NOT NULL DEFAULT 0,
+  fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS detalle_salidas (
   id_detalle UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   id_salida UUID NOT NULL REFERENCES salidas_alm(id_salida) ON DELETE CASCADE,
@@ -132,15 +141,33 @@ CREATE TABLE IF NOT EXISTS movimientos_inv (
 
 CREATE TABLE IF NOT EXISTS pedidos_suplidores (
   id_pedido UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  id_producto UUID NOT NULL REFERENCES productos(id_producto),
+  id_producto UUID REFERENCES productos(id_producto),
+  id_tipo_producto UUID NOT NULL REFERENCES tipos_producto(id_tipo),
+  id_marca UUID REFERENCES marcas(id_marca),
+  id_modelo UUID REFERENCES modelos(id_modelo),
+  nombre_producto VARCHAR(200),
   id_suplidor UUID NOT NULL REFERENCES suplidores(id_suplidor),
   cantidad_solicitada INTEGER NOT NULL,
   fecha_pedido TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   fecha_esperada DATE,
   fecha_recibido DATE,
-  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+  estado VARCHAR(50) NOT NULL,
   id_usuario_solicita UUID NOT NULL REFERENCES usuarios(id_usuario)
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE constraint_name = 'fk_pedidos_estado'
+      AND table_name = 'pedidos_suplidores'
+  ) THEN
+    ALTER TABLE pedidos_suplidores
+      ADD CONSTRAINT fk_pedidos_estado
+      FOREIGN KEY (estado) REFERENCES pedido_estados(nombre) ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Índices sugeridos -----------------------------------------------------------------
 
@@ -179,6 +206,13 @@ VALUES
   ('Pendiente de entrega', 'Salida registrada a la espera de ser entregada'),
   ('Apartado', 'Productos apartados o reservados para un cliente'),
   ('Entregado', 'Salida finalizada y entregada al cliente')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO pedido_estados (nombre, descripcion, posicion)
+VALUES
+  ('Solicitado', 'Pedido registrado en espera de confirmación', 1),
+  ('Recibido', 'Pedido recibido en almacén', 2),
+  ('Cancelado', 'Pedido cancelado por el equipo', 3)
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO marcas (nombre, descripcion)

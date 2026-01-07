@@ -10,6 +10,7 @@ import suppliersRouter from "./routes/suppliers";
 import productsRouter from "./routes/products";
 import salidasRouter from "./routes/salidas";
 import salidaStatusesRouter from "./routes/salidaStatuses";
+import pedidoStatusesRouter from "./routes/pedidoStatuses";
 import pedidosRouter from "./routes/pedidos";
 import movimientosRouter from "./routes/movimientos";
 import productTypesRouter from "./routes/productTypes";
@@ -41,6 +42,7 @@ app.use("/models", modelsRouter);
 app.use("/roles", rolesRouter);
 app.use("/salidas", salidasRouter);
 app.use("/salida-statuses", salidaStatusesRouter);
+app.use("/pedido-statuses", pedidoStatusesRouter);
 app.use("/pedidos", pedidosRouter);
 app.use("/movimientos", movimientosRouter);
 
