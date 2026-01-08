@@ -578,6 +578,7 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         }
       }
 
+      const initialStockMaximo = Math.max(typeof targetCantidad === "number" ? targetCantidad : 0, 1);
       const {
         rows: newProductRows
       } = await client.query(
@@ -592,12 +593,14 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
            stock_actual,
            stock_no_disponible,
            stock_minimo,
+           stock_maximo,
+           semanas_max_sin_movimiento,
            id_suplidor,
            disponible
          )
-         VALUES ($1, NULL, $2, $3, $4, 0, 0, 0, 0, 0, $5, TRUE)
+         VALUES ($1, NULL, $2, $3, $4, 0, 0, 0, 0, 0, $5, 0, $6, TRUE)
          RETURNING id_producto`,
-        [baseName, current.id_tipo_producto, current.id_marca, current.id_modelo, current.id_suplidor]
+        [baseName, current.id_tipo_producto, current.id_marca, current.id_modelo, initialStockMaximo, current.id_suplidor]
       );
 
       productIdForUpdate = newProductRows[0].id_producto;
@@ -622,8 +625,8 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         client.release();
         return res.status(400).json({ message: "Producto asociado no encontrado" });
       }
-      const productResult = await client.query<{ stock_actual: number }>(
-        `SELECT stock_actual FROM productos WHERE id_producto = $1 FOR UPDATE`,
+      const productResult = await client.query<{ stock_actual: number; stock_maximo: number }>(
+        `SELECT stock_actual, stock_maximo FROM productos WHERE id_producto = $1 FOR UPDATE`,
         [productIdForUpdate]
       );
       if (!productResult.rowCount) {
@@ -632,6 +635,7 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         return res.status(400).json({ message: "Producto asociado no encontrado" });
       }
       const stockActual = Number(productResult.rows[0].stock_actual);
+      const stockMaximoActual = Number(productResult.rows[0].stock_maximo);
       let nuevoStock = stockActual;
       let movimientoCantidad = 0;
       let movimientoTipo = "ajuste";
@@ -642,6 +646,14 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         movimientoCantidad = targetCantidad;
         movimientoTipo = "entrada";
         mensaje = `Pedido ${id} recibido`;
+
+        if (!Number.isNaN(stockMaximoActual) && stockMaximoActual > 0 && nuevoStock > stockMaximoActual) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res
+            .status(400)
+            .json({ message: "El stock máximo del producto sería superado. Ajusta el límite antes de recibir el pedido." });
+        }
       } else {
         nuevoStock = stockActual - current.cantidad_solicitada;
         if (nuevoStock < 0) {
@@ -653,7 +665,10 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         mensaje = `Pedido ${id} revertido`;
       }
 
-      await client.query(`UPDATE productos SET stock_actual = $1 WHERE id_producto = $2`, [nuevoStock, productIdForUpdate]);
+      await client.query(`UPDATE productos SET stock_actual = $1, ultima_fecha_movimiento = NOW() WHERE id_producto = $2`, [
+        nuevoStock,
+        productIdForUpdate
+      ]);
 
       await client.query(
         `INSERT INTO movimientos_inv (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, id_usuario, observacion)

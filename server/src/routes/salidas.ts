@@ -191,7 +191,10 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
         [salidaId, detail.productId, detail.cantidad, detail.precioUnitario, detail.subtotal]
       );
 
-      await client.query(`UPDATE productos SET stock_actual = $1 WHERE id_producto = $2`, [detail.stockNuevo, detail.productId]);
+      await client.query(`UPDATE productos SET stock_actual = $1, ultima_fecha_movimiento = NOW() WHERE id_producto = $2`, [
+        detail.stockNuevo,
+        detail.productId
+      ]);
 
       await client.query(
         `INSERT INTO movimientos_inv (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, id_usuario, observacion)

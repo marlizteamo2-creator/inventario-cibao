@@ -24,6 +24,9 @@ const baseSelect = `
          p.stock_actual,
          p.stock_no_disponible,
          p.stock_minimo,
+         p.stock_maximo,
+         p.semanas_max_sin_movimiento,
+         p.ultima_fecha_movimiento,
          p.disponible,
          p.motivo_no_disponible,
          p.id_suplidor,
@@ -50,6 +53,9 @@ const mapProduct = (row: any) => ({
   stockActual: row.stock_actual,
   stockNoDisponible: row.stock_no_disponible,
   stockMinimo: row.stock_minimo,
+  stockMaximo: row.stock_maximo,
+  semanasMaxSinMovimiento: row.semanas_max_sin_movimiento,
+  ultimaFechaMovimiento: row.ultima_fecha_movimiento,
   disponible: row.disponible,
   motivoNoDisponible: row.motivo_no_disponible,
   suplidorId: row.id_suplidor,
@@ -152,9 +158,11 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
       modeloNombre,
       precioTienda,
       precioRuta,
-      stockActual = 0,
-      stockNoDisponible = 0,
-      stockMinimo = 0,
+      stockActual: stockActualInput = 0,
+      stockNoDisponible: stockNoDisponibleInput = 0,
+      stockMinimo: stockMinimoInput = 0,
+      stockMaximo: stockMaximoInput,
+      semanasMaxSinMovimiento,
       suplidorId,
       disponible = true,
       motivoNoDisponible
@@ -172,12 +180,47 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
       return res.status(400).json({ message: "Debes indicar los precios de tienda y ruta" });
     }
 
-    if (stockNoDisponible < 0) {
+    const stockActual = Number(stockActualInput ?? 0);
+    const stockNoDisponible = Number(stockNoDisponibleInput ?? 0);
+    const stockMinimo = Number(stockMinimoInput ?? 0);
+    const stockMaximo =
+      stockMaximoInput !== undefined ? Number(stockMaximoInput) : Number.isFinite(stockActual) ? stockActual : 0;
+
+    if (Number.isNaN(stockActual) || stockActual < 0) {
+      return res.status(400).json({ message: "Stock actual no válido" });
+    }
+
+    if (Number.isNaN(stockNoDisponible) || stockNoDisponible < 0) {
       return res.status(400).json({ message: "Las unidades inactivas no pueden ser negativas" });
     }
 
     if (stockNoDisponible > stockActual) {
       return res.status(400).json({ message: "Las unidades inactivas no pueden superar el stock actual" });
+    }
+
+    if (Number.isNaN(stockMinimo) || stockMinimo < 0) {
+      return res.status(400).json({ message: "El stock mínimo debe ser un número positivo" });
+    }
+
+    if (stockMaximoInput === undefined) {
+      return res.status(400).json({ message: "Debes definir el stock máximo permitido" });
+    }
+
+    if (Number.isNaN(stockMaximo) || stockMaximo <= 0) {
+      return res.status(400).json({ message: "El stock máximo debe ser mayor a cero" });
+    }
+
+    if (stockMinimo > stockMaximo) {
+      return res.status(400).json({ message: "El stock máximo debe ser mayor o igual al stock mínimo" });
+    }
+
+    if (stockActual > stockMaximo) {
+      return res.status(400).json({ message: "El stock actual no puede superar el stock máximo definido" });
+    }
+
+    const semanasMax = semanasMaxSinMovimiento !== undefined ? Number(semanasMaxSinMovimiento) : 0;
+    if (Number.isNaN(semanasMax) || semanasMax < 0) {
+      return res.status(400).json({ message: "Las semanas sin movimiento deben ser 0 o más" });
     }
 
     const { rowCount: typeExists } = await query(`SELECT 1 FROM tipos_producto WHERE id_tipo = $1`, [tipoId]);
@@ -229,8 +272,8 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
     const cleanReason = typeof motivoNoDisponible === "string" ? motivoNoDisponible.trim() : null;
 
     const { rows } = await query(
-      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, stock_actual, stock_no_disponible, stock_minimo, id_suplidor, disponible, motivo_no_disponible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, stock_actual, stock_no_disponible, stock_minimo, stock_maximo, semanas_max_sin_movimiento, id_suplidor, disponible, motivo_no_disponible)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         nombre,
@@ -243,6 +286,8 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
         stockActual,
         stockNoDisponible,
         stockMinimo,
+        stockMaximo,
+        semanasMax,
         suplidorId ?? null,
         disponible,
         cleanReason
@@ -312,8 +357,7 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
       nombre: "nombre",
       descripcion: "descripcion",
       precioTienda: "precio_tienda",
-      precioRuta: "precio_ruta",
-      stockMinimo: "stock_minimo"
+      precioRuta: "precio_ruta"
     };
 
     Object.entries(mapFields).forEach(([key, column]) => {
@@ -324,6 +368,9 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     let targetStockActual = current.stock_actual;
     let targetStockNoDisponible = current.stock_no_disponible ?? 0;
+    let targetStockMinimo = current.stock_minimo ?? 0;
+    let targetStockMaximo = current.stock_maximo ?? 0;
+    let targetSemanasSinMovimiento = current.semanas_max_sin_movimiento ?? 0;
     let targetTipoId = body.tipoId ?? current.id_tipo_producto;
     let targetMarcaId = body.marcaId ?? current.id_marca;
     let finalModeloId = current.id_modelo;
@@ -349,6 +396,33 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     if (targetStockNoDisponible > targetStockActual) {
       return res.status(400).json({ message: "Las unidades inactivas no pueden superar el stock actual" });
+    }
+
+    if (body.stockMinimo !== undefined) {
+      const parsedMin = Number(body.stockMinimo);
+      if (Number.isNaN(parsedMin) || parsedMin < 0) {
+        return res.status(400).json({ message: "El stock mínimo debe ser un número positivo" });
+      }
+      targetStockMinimo = parsedMin;
+      setField("stock_minimo", parsedMin);
+    }
+
+    if (body.stockMaximo !== undefined) {
+      const parsedMax = Number(body.stockMaximo);
+      if (Number.isNaN(parsedMax) || parsedMax <= 0) {
+        return res.status(400).json({ message: "El stock máximo debe ser mayor a cero" });
+      }
+      targetStockMaximo = parsedMax;
+      setField("stock_maximo", parsedMax);
+    }
+
+    if (body.semanasMaxSinMovimiento !== undefined) {
+      const parsedWeeks = Number(body.semanasMaxSinMovimiento);
+      if (Number.isNaN(parsedWeeks) || parsedWeeks < 0) {
+        return res.status(400).json({ message: "Las semanas sin movimiento deben ser 0 o más" });
+      }
+      targetSemanasSinMovimiento = parsedWeeks;
+      setField("semanas_max_sin_movimiento", parsedWeeks);
     }
 
     if (body.disponible !== undefined) {
@@ -435,6 +509,14 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     if (modeloChanged) {
       setField("id_modelo", finalModeloId ?? null);
+    }
+
+    if (targetStockMinimo > targetStockMaximo) {
+      return res.status(400).json({ message: "El stock máximo debe ser mayor o igual al stock mínimo" });
+    }
+
+    if (targetStockActual > targetStockMaximo) {
+      return res.status(400).json({ message: "El stock actual no puede superar el stock máximo definido" });
     }
 
     if (!updates.length) {

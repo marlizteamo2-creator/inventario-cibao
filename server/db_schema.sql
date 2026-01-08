@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS productos (
   stock_actual INTEGER NOT NULL DEFAULT 0,
   stock_no_disponible INTEGER NOT NULL DEFAULT 0,
   stock_minimo INTEGER NOT NULL DEFAULT 0,
+  stock_maximo INTEGER NOT NULL DEFAULT 0,
   id_suplidor UUID REFERENCES suplidores(id_suplidor),
   fecha_ingreso TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   disponible BOOLEAN NOT NULL DEFAULT TRUE,
