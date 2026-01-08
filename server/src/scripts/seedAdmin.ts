@@ -15,7 +15,7 @@ const roles = [
 const adminUser = {
   firstName: "Gerente",
   lastName: "General",
-  email: "gerente@inventario.com",
+  email: "el_reyestorres@hotmail.com",
   password: "cibaoAdmin123",
   roleName: "Administrador"
 };
