@@ -20,7 +20,7 @@ const tipoOptions = [
   { value: "todos", label: "Todos los movimientos" },
   { value: "salida", label: "Salidas" },
   { value: "entrada", label: "Entradas" },
-  { value: "ajuste", label: "Ajustes" },
+  // { value: "ajuste", label: "Ajustes" },
 ];
 
 const tipoClasses: Record<string, string> = {
@@ -31,6 +31,26 @@ const tipoClasses: Record<string, string> = {
 
 const formatDateTime = (value: string) =>
   new Date(value).toLocaleString("es-DO");
+
+const sanitizeObservation = (raw?: string | null, tipo?: string) => {
+  const normalizedTipo = (tipo ?? "").toLowerCase();
+  if (normalizedTipo === "entrada") {
+    return "Entrada";
+  }
+  if (normalizedTipo === "salida") {
+    return "Salida";
+  }
+  if (!raw) {
+    return "—";
+  }
+  if (/^pedido\b/i.test(raw) || /entrada/i.test(raw)) {
+    return "Entrada";
+  }
+  if (/^salida\b/i.test(raw)) {
+    return "Salida";
+  }
+  return raw;
+};
 
 export default function MovimientosPage() {
   const { hydrated } = useRequireAuth();
@@ -150,7 +170,12 @@ export default function MovimientosPage() {
     if (!search) return base;
     const query = search.toLowerCase();
     return base.filter((mov) =>
-      [mov.producto, mov.usuario, mov.tipoMovimiento, mov.observacion ?? ""]
+      [
+        mov.producto,
+        mov.usuario,
+        mov.tipoMovimiento,
+        sanitizeObservation(mov.observacion, mov.tipoMovimiento),
+      ]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(query))
     );
@@ -302,7 +327,10 @@ export default function MovimientosPage() {
                         {movimiento.usuario}
                       </td>
                       <td className="px-4 py-2 text-slate-600">
-                        {movimiento.observacion ?? "—"}
+                        {sanitizeObservation(
+                          movimiento.observacion,
+                          movimiento.tipoMovimiento
+                        )}
                       </td>
                     </tr>
                   ))}

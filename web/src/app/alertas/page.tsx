@@ -12,6 +12,7 @@ import {
   Truck,
   ChevronLeft,
   ChevronRight,
+  Clock8,
 } from "lucide-react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import useRequireAuth from "@/hooks/useRequireAuth";
@@ -24,7 +25,7 @@ const currencyFormatter = new Intl.NumberFormat("es-DO", {
   maximumFractionDigits: 2,
 });
 const PAGE_SIZE = 5;
-type AlertFilter = "all" | "stock" | "pedidos" | "entregas";
+type AlertFilter = "all" | "stock" | "pedidos" | "entregas" | "inactividad";
 
 export default function AlertasPage() {
   const { hydrated } = useRequireAuth();
@@ -37,7 +38,7 @@ export default function AlertasPage() {
   const [search, setSearch] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [filterType, setFilterType] = useState<AlertFilter>("all");
-  const [pagination, setPagination] = useState({ stock: 1, pedidos: 1, entregas: 1 });
+  const [pagination, setPagination] = useState({ stock: 1, pedidos: 1, entregas: 1, inactividad: 1 });
 
   const loadAlertsData = useCallback(async () => {
     if (!token) {
@@ -154,13 +155,51 @@ export default function AlertasPage() {
       });
   }, [salidas, normalizedSearch]);
 
+  const inactivityAlerts = useMemo(() => {
+    const now = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    return products
+      .filter((product) => {
+        const limit = Number(product.semanasMaxSinMovimiento ?? 0);
+        if (!limit) return false;
+        const last = product.ultimaFechaMovimiento ? new Date(product.ultimaFechaMovimiento) : null;
+        if (!last || Number.isNaN(last.getTime())) return false;
+        last.setHours(0, 0, 0, 0);
+        const diffWeeks = Math.floor((now - last.getTime()) / weekMs);
+        return diffWeeks >= limit;
+      })
+      .map((product) => {
+        const last = product.ultimaFechaMovimiento ? new Date(product.ultimaFechaMovimiento) : null;
+        const limit = Number(product.semanasMaxSinMovimiento ?? 0);
+        const weeks =
+          last != null ? Math.floor((now - last.getTime()) / weekMs) : 0;
+        return {
+          id: product.id,
+          nombre: product.nombre,
+          tipo: product.tipoNombre,
+          marca: product.marcaNombre,
+          modelo: product.modeloNombre,
+          semanasSinMovimiento: weeks,
+          limite: limit,
+          ultimaFechaMovimiento: product.ultimaFechaMovimiento,
+        };
+      })
+      .filter((item) => {
+        if (!normalizedSearch) return true;
+        return [item.nombre, item.tipo, item.marca, item.modelo]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(normalizedSearch));
+      });
+  }, [products, normalizedSearch]);
+
   useEffect(() => {
     setPagination((prev) => ({
       stock: clampPage(prev.stock, stockAlerts.length),
       pedidos: clampPage(prev.pedidos, pedidoAlerts.length),
       entregas: clampPage(prev.entregas, entregaAlerts.length),
+      inactividad: clampPage(prev.inactividad, inactivityAlerts.length),
     }));
-  }, [stockAlerts.length, pedidoAlerts.length, entregaAlerts.length]);
+  }, [stockAlerts.length, pedidoAlerts.length, entregaAlerts.length, inactivityAlerts.length]);
 
   const handleRefresh = useCallback(() => {
     if (!loading) {
@@ -175,10 +214,12 @@ export default function AlertasPage() {
   const showStockPanel = filterType === "all" || filterType === "stock";
   const showPedidoPanel = filterType === "all" || filterType === "pedidos";
   const showEntregaPanel = filterType === "all" || filterType === "entregas";
+  const showInactividadPanel = filterType === "all" || filterType === "inactividad";
 
   const stockPage = paginate(stockAlerts, pagination.stock);
   const pedidoPage = paginate(pedidoAlerts, pagination.pedidos);
   const entregaPage = paginate(entregaAlerts, pagination.entregas);
+  const inactividadPage = paginate(inactivityAlerts, pagination.inactividad);
 
   return (
     <AdminLayout active="Alertas">
@@ -226,6 +267,7 @@ export default function AlertasPage() {
               stockCount={stockAlerts.length}
               pedidoCount={pedidoAlerts.length}
               entregaCount={entregaAlerts.length}
+              inactividadCount={inactivityAlerts.length}
             />
           </div>
         </div>
@@ -235,7 +277,11 @@ export default function AlertasPage() {
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Alertas encontradas</p>
               <h2 className="text-xl font-semibold text-slate-900">
-                {[stockAlerts.length, pedidoAlerts.length, entregaAlerts.length].reduce((a, b) => a + b, 0)} alertas activas
+                {[stockAlerts.length, pedidoAlerts.length, entregaAlerts.length, inactivityAlerts.length].reduce(
+                  (a, b) => a + b,
+                  0
+                )}{" "}
+                alertas activas
               </h2>
             </div>
             <label className="relative flex items-center">
@@ -286,6 +332,15 @@ export default function AlertasPage() {
                 onPageChange={(page) => setPagination((prev) => ({ ...prev, entregas: page }))}
               />
             )}
+            {showInactividadPanel && (
+              <InactividadAlertPanel
+                alerts={inactividadPage.items}
+                total={inactivityAlerts.length}
+                page={inactividadPage.page}
+                totalPages={inactividadPage.totalPages}
+                onPageChange={(page) => setPagination((prev) => ({ ...prev, inactividad: page }))}
+              />
+            )}
           </div>
         </div>
       </section>
@@ -297,10 +352,12 @@ function AlertSummary({
   stockCount,
   pedidoCount,
   entregaCount,
+  inactividadCount,
 }: {
   stockCount: number;
   pedidoCount: number;
   entregaCount: number;
+  inactividadCount: number;
 }) {
   const cards = [
     {
@@ -324,26 +381,40 @@ function AlertSummary({
       tone: "warning" as const,
       icon: Truck,
     },
+    {
+      label: "Sin movimiento",
+      description: "Superaron el límite de inactividad",
+      count: inactividadCount,
+      tone: "inactive" as const,
+      icon: Clock8,
+    },
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => {
         const Icon = card.icon;
-        const isCritical = card.tone === "critical";
-        const palette = isCritical
-          ? {
-              border: "border-red-100",
-              bg: "bg-red-50",
-              count: "text-red-700",
-              iconBg: "bg-red-200/60 text-red-600",
-            }
-          : {
-              border: "border-amber-100",
-              bg: "bg-amber-50",
-              count: "text-amber-700",
-              iconBg: "bg-amber-200/60 text-amber-600",
-            };
+        const palette =
+          card.tone === "critical"
+            ? {
+                border: "border-red-100",
+                bg: "bg-red-50",
+                count: "text-red-700",
+                iconBg: "bg-red-200/60 text-red-600",
+              }
+            : card.tone === "inactive"
+              ? {
+                  border: "border-orange-100",
+                  bg: "bg-orange-50",
+                  count: "text-orange-700",
+                  iconBg: "bg-orange-200/60 text-orange-600",
+                }
+              : {
+                  border: "border-amber-100",
+                  bg: "bg-amber-50",
+                  count: "text-amber-700",
+                  iconBg: "bg-amber-200/60 text-amber-600",
+                };
         return (
           <article
             key={card.label}
@@ -564,6 +635,77 @@ function EntregaAlertPanel({
   );
 }
 
+function InactividadAlertPanel({
+  alerts,
+  total,
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  alerts: Array<{
+    id: string;
+    nombre: string;
+    tipo?: string | null;
+    marca?: string | null;
+    modelo?: string | null;
+    semanasSinMovimiento: number;
+    limite: number;
+    ultimaFechaMovimiento?: string | null;
+  }>;
+  total: number;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (total === 0) {
+    return (
+      <EmptyAlertState
+        title="Sin alertas de inactividad"
+        description="Todos los productos tienen movimientos dentro del periodo permitido."
+        tone="warning"
+      />
+    );
+  }
+
+  return (
+    <section>
+      <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-orange-600">Productos sin movimiento</h3>
+      <div className="space-y-4">
+        {alerts.map((alert) => (
+          <article
+            key={alert.id}
+            className="rounded-3xl border border-orange-200 bg-orange-50 p-5 text-sm text-slate-800 shadow-sm transition hover:border-orange-300 hover:bg-white"
+          >
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase text-orange-600">Producto</p>
+                <h4 className="text-lg font-semibold text-slate-900">{alert.nombre}</h4>
+                <p className="text-sm text-slate-500">
+                  {[alert.tipo, alert.marca, alert.modelo].filter(Boolean).join(" • ") || "Sin clasificar"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-orange-600">Semanas sin movimiento</p>
+                <p className="text-2xl font-bold text-orange-700">{alert.semanasSinMovimiento}</p>
+                <p className="text-xs text-slate-500">Permitido: {alert.limite}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-orange-600">Último movimiento</p>
+                <p className="text-base font-semibold">
+                  {alert.ultimaFechaMovimiento ? new Date(alert.ultimaFechaMovimiento).toLocaleDateString() : "No registro"}
+                </p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+      {totalPages > 1 && (
+        <PaginationControls page={page} totalPages={totalPages} onChange={onPageChange} label="inactividad" />
+      )}
+    </section>
+  );
+}
+
 function EmptyAlertState({ title, description, tone }: { title: string; description: string; tone: "warning" | "critical" }) {
   const isCritical = tone === "critical";
   return (
@@ -587,6 +729,7 @@ function FilterTabs({ active, onChange }: { active: AlertFilter; onChange: (valu
     { value: "stock", label: "Stock mínimo" },
     { value: "pedidos", label: "Pedidos vencidos" },
     { value: "entregas", label: "Entregas pendientes" },
+    { value: "inactividad", label: "Sin movimiento" },
   ];
   return (
     <div className="mb-6 flex flex-wrap gap-2 rounded-3xl bg-slate-50 p-2">

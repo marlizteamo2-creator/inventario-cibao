@@ -35,6 +35,9 @@ export type Product = {
   stockActual: number;
   stockNoDisponible?: number;
   stockMinimo: number;
+  stockMaximo: number;
+  semanasMaxSinMovimiento?: number;
+  ultimaFechaMovimiento?: string | null;
   disponible: boolean;
   motivoNoDisponible?: string;
   suplidorId?: string | null;

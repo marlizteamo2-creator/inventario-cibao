@@ -13,7 +13,7 @@ import {
   createPedidoStatus,
   deletePedidoStatus,
   fetchPedidoStatuses,
-  updatePedidoStatus
+  updatePedidoStatus,
 } from "@/lib/api";
 
 const initialForm = {
@@ -21,7 +21,7 @@ const initialForm = {
   nombre: "",
   descripcion: "",
   activo: true,
-  posicion: ""
+  posicion: "",
 };
 
 export default function PedidoStatusesPage() {
@@ -30,11 +30,16 @@ export default function PedidoStatusesPage() {
   const [statuses, setStatuses] = useState<PedidoStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
+  const [messageVariant, setMessageVariant] = useState<
+    "info" | "success" | "error"
+  >("info");
   const [form, setForm] = useState(initialForm);
   const [showFormModal, setShowFormModal] = useState(false);
 
-  const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
+  const showAlert = (
+    text: string | null,
+    variant: "info" | "success" | "error" = "info"
+  ) => {
     setMessage(text);
     if (text) {
       setMessageVariant(variant);
@@ -67,7 +72,9 @@ export default function PedidoStatusesPage() {
       return;
     }
     const posicionValue =
-      form.posicion.toString().trim().length > 0 ? Number(form.posicion) : undefined;
+      form.posicion.toString().trim().length > 0
+        ? Number(form.posicion)
+        : undefined;
     if (posicionValue !== undefined && Number.isNaN(posicionValue)) {
       showAlert("La posición debe ser un número", "error");
       return;
@@ -78,7 +85,7 @@ export default function PedidoStatusesPage() {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || null,
           activo: form.activo,
-          posicion: posicionValue
+          posicion: posicionValue,
         });
         showAlert("Estado actualizado", "success");
       } else {
@@ -86,7 +93,7 @@ export default function PedidoStatusesPage() {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined,
           activo: form.activo,
-          posicion: posicionValue
+          posicion: posicionValue,
         });
         showAlert("Estado creado", "success");
       }
@@ -104,14 +111,17 @@ export default function PedidoStatusesPage() {
       nombre: status.nombre,
       descripcion: status.descripcion ?? "",
       activo: status.activo,
-      posicion: status.posicion?.toString() ?? ""
+      posicion: status.posicion?.toString() ?? "",
     });
     setShowFormModal(true);
   };
 
   const handleDelete = async (status: PedidoStatus) => {
     if (!token || !status.id) return;
-    if (typeof window !== "undefined" && !window.confirm(`¿Eliminar el estado "${status.nombre}"?`)) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`¿Eliminar el estado "${status.nombre}"?`)
+    ) {
       return;
     }
     try {
@@ -133,7 +143,9 @@ export default function PedidoStatusesPage() {
   if (role !== "Administrador") {
     return (
       <AdminLayout active="Estados de pedidos">
-        <p className="text-sm text-slate-500">Solo los administradores pueden gestionar los estados de pedidos.</p>
+        <p className="text-sm text-slate-500">
+          Solo los administradores pueden gestionar los estados de pedidos.
+        </p>
       </AdminLayout>
     );
   }
@@ -150,8 +162,12 @@ export default function PedidoStatusesPage() {
       <div className="rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Estados registrados</p>
-            <h2 className="text-xl font-semibold text-slate-900">Catálogo de estados de pedidos</h2>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+              Estados registrados
+            </p>
+            <h2 className="text-xl font-semibold text-slate-900">
+              Catálogo de estados de pedidos
+            </h2>
           </div>
           <Button
             variant="accent"
@@ -165,20 +181,38 @@ export default function PedidoStatusesPage() {
           </Button>
         </div>
         <div className="mt-4 space-y-3">
-          {loading && <p className="text-sm text-slate-500">Cargando estados...</p>}
-          {!loading && !statuses.length && <p className="text-sm text-slate-500">Aún no has registrado estados.</p>}
+          {loading && (
+            <p className="text-sm text-slate-500">Cargando estados...</p>
+          )}
+          {!loading && !statuses.length && (
+            <p className="text-sm text-slate-500">
+              Aún no has registrado estados.
+            </p>
+          )}
           {!loading &&
             statuses.map((status) => (
-              <div key={status.id} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
+              <div
+                key={status.id}
+                className="flex items-center justify-between rounded-2xl border border-slate-200 p-4"
+              >
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">{status.nombre}</p>
-                  <p className="text-xs text-slate-500">{status.descripcion || "Sin descripción"}</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {status.nombre}
+                  </p>
                   <p className="text-xs text-slate-500">
-                    {status.activo ? "Activo" : "Inactivo"} · Posición: {status.posicion ?? "—"}
+                    {status.descripcion || "Sin descripción"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {status.activo ? "Activo" : "Inactivo"} · Posición:{" "}
+                    {status.posicion ?? "—"}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Button variant="subtle" className="px-2 py-1 text-xs" onClick={() => handleEdit(status)}>
+                  <Button
+                    variant="subtle"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => handleEdit(status)}
+                  >
                     Editar
                   </Button>
                   <Button
@@ -202,7 +236,9 @@ export default function PedidoStatusesPage() {
                   {form.id ? "Editar estado" : "Nuevo estado"}
                 </p>
                 <h2 className="text-xl font-semibold text-slate-900">
-                  {form.id ? "Actualizar estado de pedido" : "Crear estado de pedido"}
+                  {form.id
+                    ? "Actualizar estado de pedido"
+                    : "Crear estado de pedido"}
                 </h2>
               </div>
               <button
@@ -218,40 +254,48 @@ export default function PedidoStatusesPage() {
             </div>
             <div className="mt-4 space-y-4">
               <div>
-                <label className="text-xs uppercase text-slate-400">Nombre</label>
+                <label className="text-xs uppercase text-slate-400">
+                  Nombre
+                </label>
                 <Input
                   value={form.nombre}
-                  onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, nombre: event.target.value }))
+                  }
                 />
               </div>
               <div>
-                <label className="text-xs uppercase text-slate-400">Descripción</label>
+                <label className="text-xs uppercase text-slate-400">
+                  Descripción
+                </label>
                 <Input
                   value={form.descripcion}
-                  onChange={(event) => setForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      descripcion: event.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="text-xs uppercase text-slate-400">Posición</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.posicion}
-                    onChange={(event) => setForm((prev) => ({ ...prev, posicion: event.target.value }))}
-                    placeholder="Opcional"
-                  />
-                  <p className="mt-1 text-xs text-slate-400">Se usa para determinar el estado por defecto.</p>
-                </div>
                 <div className="flex items-center gap-2 pt-5">
                   <input
                     id="pedido-status-active"
                     type="checkbox"
                     className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                     checked={form.activo}
-                    onChange={(event) => setForm((prev) => ({ ...prev, activo: event.target.checked }))}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        activo: event.target.checked,
+                      }))
+                    }
                   />
-                  <label htmlFor="pedido-status-active" className="text-sm text-slate-600">
+                  <label
+                    htmlFor="pedido-status-active"
+                    className="text-sm text-slate-600"
+                  >
                     Estado activo
                   </label>
                 </div>

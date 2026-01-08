@@ -217,6 +217,8 @@ export async function createProduct(
     stockActual: number;
     stockNoDisponible?: number;
     stockMinimo: number;
+    stockMaximo: number;
+    semanasMaxSinMovimiento?: number;
     suplidorId?: string;
     disponible: boolean;
     motivoNoDisponible?: string;
@@ -244,6 +246,8 @@ export async function updateProduct(
     stockActual?: number;
     stockNoDisponible?: number;
     stockMinimo?: number;
+    stockMaximo?: number;
+    semanasMaxSinMovimiento?: number;
     suplidorId?: string;
     disponible?: boolean;
     motivoNoDisponible?: string | null;

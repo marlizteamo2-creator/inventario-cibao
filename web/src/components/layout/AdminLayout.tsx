@@ -134,13 +134,15 @@ type AlertCounts = {
   stock: number;
   pedidosVencidos: number;
   salidasPendientes: number;
+  productosInactivos: number;
   total: number;
 };
 
 type ToastPayload =
   | { type: "stock"; message: string }
   | { type: "pedido"; message: string }
-  | { type: "salida"; message: string };
+  | { type: "salida"; message: string }
+  | { type: "inactividad"; message: string };
 
 const normalizeText = (value?: string | null) => (value ?? "").trim().toLowerCase();
 const isPendingSalidaEstado = (estado?: string | null) => {
@@ -177,6 +179,7 @@ export default function AdminLayout({
     stock: 0,
     pedidosVencidos: 0,
     salidasPendientes: 0,
+    productosInactivos: 0,
     total: 0,
   });
   const [toastQueue, setToastQueue] = useState<ToastPayload[]>([]);
@@ -203,7 +206,7 @@ export default function AdminLayout({
 
   const loadAlertCount = useCallback(async () => {
     if (!hydrated || !token || role !== "Administrador") {
-      setAlertCounts({ stock: 0, pedidosVencidos: 0, salidasPendientes: 0, total: 0 });
+      setAlertCounts({ stock: 0, pedidosVencidos: 0, salidasPendientes: 0, productosInactivos: 0, total: 0 });
       return;
     }
     try {
@@ -219,15 +222,27 @@ export default function AdminLayout({
       });
       const overduePedidos = pedidos.filter(isPedidoOverdue);
       const pendingDeliveries = salidas.filter((salida) => isPendingSalidaEstado(salida.estado));
+      const now = Date.now();
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      const inactiveProducts = products.filter((product) => {
+        const limitWeeks = Number(product.semanasMaxSinMovimiento ?? 0);
+        if (!limitWeeks) return false;
+        const lastMovement = product.ultimaFechaMovimiento ? new Date(product.ultimaFechaMovimiento) : null;
+        if (!lastMovement || Number.isNaN(lastMovement.getTime())) return false;
+        lastMovement.setHours(0, 0, 0, 0);
+        const diffWeeks = Math.floor((now - lastMovement.getTime()) / weekMs);
+        return diffWeeks >= limitWeeks;
+      });
       setAlertCounts({
         stock: lowStock.length,
         pedidosVencidos: overduePedidos.length,
         salidasPendientes: pendingDeliveries.length,
-        total: lowStock.length + overduePedidos.length + pendingDeliveries.length,
+        productosInactivos: inactiveProducts.length,
+        total: lowStock.length + overduePedidos.length + pendingDeliveries.length + inactiveProducts.length,
       });
     } catch (error) {
       console.error("No se pudieron cargar las alertas", error);
-      setAlertCounts({ stock: 0, pedidosVencidos: 0, salidasPendientes: 0, total: 0 });
+      setAlertCounts({ stock: 0, pedidosVencidos: 0, salidasPendientes: 0, productosInactivos: 0, total: 0 });
     }
   }, [token, role, hydrated]);
 
@@ -257,6 +272,16 @@ export default function AdminLayout({
       pendingToasts.push({
         type: "salida",
         message: qty === 1 ? "1 entrega sigue pendiente" : `${qty} entregas siguen pendientes`,
+      });
+    }
+    if (alertCounts.productosInactivos > prev.productosInactivos) {
+      const qty = alertCounts.productosInactivos;
+      pendingToasts.push({
+        type: "inactividad",
+        message:
+          qty === 1
+            ? "1 producto superó su tiempo sin movimiento"
+            : `${qty} productos superaron su tiempo sin movimiento`,
       });
     }
     if (alertCounts.stock > prev.stock) {
@@ -459,12 +484,22 @@ export default function AdminLayout({
               "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg ring-1",
               toast.type === "pedido"
                 ? "bg-red-50 text-red-900 ring-red-200"
-                : "bg-yellow-50 text-yellow-900 ring-yellow-200"
+                : toast.type === "salida"
+                  ? "bg-amber-50 text-amber-900 ring-amber-200"
+                  : toast.type === "inactividad"
+                    ? "bg-orange-50 text-orange-900 ring-orange-200"
+                    : "bg-yellow-50 text-yellow-900 ring-yellow-200"
             )}
           >
             <AlertTriangle
               size={18}
-              className={toast.type === "pedido" ? "text-red-500" : "text-yellow-500"}
+              className={
+                toast.type === "pedido"
+                  ? "text-red-500"
+                  : toast.type === "inactividad"
+                    ? "text-orange-500"
+                    : "text-yellow-500"
+              }
             />
             <p>{toast.message}</p>
           </div>

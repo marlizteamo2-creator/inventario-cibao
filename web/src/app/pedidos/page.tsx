@@ -131,7 +131,18 @@ export default function PedidosPage() {
     }
   }, [hydrated, token, loadData]);
 
+  const normalizedRole = (role ?? "").toLowerCase();
+  const isVendor = normalizedRole === "vendedor";
+  const canRegisterCatalog = !isVendor;
   const canManage = role === "Administrador";
+
+  useEffect(() => {
+    if (canRegisterCatalog) {
+      return;
+    }
+    setNewBrandName("");
+    setNewModelName("");
+  }, [canRegisterCatalog]);
 
   const stats = useMemo(() => {
     const pending = pedidos.filter((p) => isPendientePedidoEstado(p.estado)).length;
@@ -213,15 +224,11 @@ export default function PedidosPage() {
     );
   }, [products, form.productTypeId, form.brandId, form.modelId]);
 
-  const hasProductDefinition = useMemo(
-    () =>
-      Boolean(
-        form.productTypeId &&
-          (form.brandId || newBrandName.trim()) &&
-          (form.modelId || newModelName.trim())
-      ),
-    [form.productTypeId, form.brandId, form.modelId, newBrandName, newModelName]
-  );
+  const hasProductDefinition = useMemo(() => {
+    const brandDraft = canRegisterCatalog ? newBrandName.trim() : "";
+    const modelDraft = canRegisterCatalog ? newModelName.trim() : "";
+    return Boolean(form.productTypeId && (form.brandId || brandDraft) && (form.modelId || modelDraft));
+  }, [form.productTypeId, form.brandId, form.modelId, newBrandName, newModelName, canRegisterCatalog]);
 
   const productTypeOptions = useMemo(
     () => productTypes.map((type) => ({ value: type.id, label: type.nombre })),
@@ -352,11 +359,11 @@ export default function PedidosPage() {
     setSaving(true);
     showAlert(null);
     try {
-      const trimmedBrandInput = newBrandName.trim();
-      const trimmedModelInput = newModelName.trim();
+      const trimmedBrandInput = canRegisterCatalog ? newBrandName.trim() : "";
+      const trimmedModelInput = canRegisterCatalog ? newModelName.trim() : "";
       let targetBrandId = form.brandId;
       let brandLabel = selectedBrand?.nombre ?? trimmedBrandInput;
-      if (!targetBrandId && trimmedBrandInput) {
+      if (!targetBrandId && trimmedBrandInput && canRegisterCatalog) {
         const brand = await createBrand(token, { nombre: trimmedBrandInput });
         setBrands((prev) => [...prev, brand]);
         targetBrandId = brand.id;
@@ -365,13 +372,13 @@ export default function PedidosPage() {
         setNewBrandName("");
       }
       if (!targetBrandId) {
-        showAlert("Selecciona una marca o escribe una nueva", "error");
+        showAlert(canRegisterCatalog ? "Selecciona una marca o escribe una nueva" : "Selecciona una marca registrada", "error");
         return;
       }
 
       let targetModelId = form.modelId;
       let modelLabel = selectedModel?.nombre ?? trimmedModelInput;
-      if (!targetModelId && trimmedModelInput) {
+      if (!targetModelId && trimmedModelInput && canRegisterCatalog) {
         const model = await createModel(token, {
           brandId: targetBrandId,
           typeId: form.productTypeId,
@@ -384,7 +391,10 @@ export default function PedidosPage() {
         setNewModelName("");
       }
       if (!targetModelId) {
-        showAlert("Selecciona un modelo o escribe uno nuevo", "error");
+        showAlert(
+          canRegisterCatalog ? "Selecciona un modelo o escribe uno nuevo" : "Selecciona un modelo registrado",
+          "error"
+        );
         return;
       }
 
@@ -539,12 +549,18 @@ export default function PedidosPage() {
                     searchPlaceholder="Buscar modelo"
                     disabled={!form.productTypeId || modelOptions.length === 0}
                   />
-                  <Input
-                    placeholder="Nuevo modelo (se registrará al guardar)"
-                    value={newModelName}
-                    onChange={(event) => setNewModelName(event.target.value)}
-                    disabled={!form.productTypeId}
-                  />
+                  {canRegisterCatalog ? (
+                    <Input
+                      placeholder="Nuevo modelo (se registrará al guardar)"
+                      value={newModelName}
+                      onChange={(event) => setNewModelName(event.target.value)}
+                      disabled={!form.productTypeId}
+                    />
+                  ) : (
+                    <p className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                      Solo un administrador puede registrar modelos nuevos.
+                    </p>
+                  )}
                 </div>
               </div>
               <div>
@@ -571,12 +587,18 @@ export default function PedidosPage() {
                     searchPlaceholder="Buscar marca"
                     disabled={!form.productTypeId || brandOptions.length === 0}
                   />
-                  <Input
-                    placeholder="Nueva marca (se registrará al guardar)"
-                    value={newBrandName}
-                    onChange={(event) => setNewBrandName(event.target.value)}
-                    disabled={!form.productTypeId}
-                  />
+                  {canRegisterCatalog ? (
+                    <Input
+                      placeholder="Nueva marca (se registrará al guardar)"
+                      value={newBrandName}
+                      onChange={(event) => setNewBrandName(event.target.value)}
+                      disabled={!form.productTypeId}
+                    />
+                  ) : (
+                    <p className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                      Los vendedores no pueden crear marcas nuevas. Selecciona una opción existente.
+                    </p>
+                  )}
                 </div>
               </div>
               <div>
@@ -619,7 +641,9 @@ export default function PedidosPage() {
                 ) : hasProductDefinition ? (
                   "No encontramos un producto con esta combinación. Lo registraremos automáticamente cuando marques el pedido como recibido."
                 ) : (
-                  "Selecciona o escribe una marca y modelo para poder crear el producto del pedido."
+                  canRegisterCatalog
+                    ? "Selecciona o escribe una marca y modelo para poder crear el producto del pedido."
+                    : "Selecciona una marca y modelo registrados para poder crear el producto del pedido."
                 )}
               </div>
             )}

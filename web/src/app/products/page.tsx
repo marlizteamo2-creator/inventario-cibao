@@ -35,6 +35,8 @@ const initialFormState = {
   stockActual: "",
   stockNoDisponible: "",
   stockMinimo: "",
+  stockMaximo: "",
+  semanasInactividad: "",
   suplidorId: "",
   disponible: "disponible" as "disponible" | "no-disponible",
 };
@@ -197,6 +199,8 @@ export default function ProductsPage() {
       stockActual: product.stockActual?.toString() ?? "",
       stockNoDisponible: product.stockNoDisponible?.toString() ?? "",
       stockMinimo: product.stockMinimo?.toString() ?? "",
+      stockMaximo: product.stockMaximo?.toString() ?? "",
+      semanasInactividad: product.semanasMaxSinMovimiento?.toString() ?? "",
       suplidorId: product.suplidorId ?? "",
       disponible: product.disponible ? "disponible" : "no-disponible",
     });
@@ -256,11 +260,30 @@ export default function ProductsPage() {
     }
     const parsedStockActual = Number(form.stockActual || 0);
     const parsedStockUnavailable = Number(form.stockNoDisponible || 0);
+    const parsedStockMinimo = Number(form.stockMinimo || 0);
+    const parsedStockMaximo = Number(form.stockMaximo || 0);
+    const parsedWeeks = Number(form.semanasInactividad || 0);
     if (parsedStockUnavailable < 0) {
       return showAlert("Las unidades inactivas no pueden ser negativas", "error");
     }
     if (parsedStockUnavailable > parsedStockActual) {
       return showAlert("Las unidades inactivas no pueden superar el stock actual", "error");
+    }
+
+    if (parsedStockMinimo < 0) {
+      return showAlert("El stock mínimo debe ser positivo", "error");
+    }
+    if (!form.stockMaximo || parsedStockMaximo <= 0) {
+      return showAlert("Define el stock máximo permitido", "error");
+    }
+    if (parsedStockMinimo > parsedStockMaximo) {
+      return showAlert("El stock máximo debe ser mayor o igual al mínimo", "error");
+    }
+    if (parsedStockActual > parsedStockMaximo) {
+      return showAlert("El stock actual supera el máximo definido", "error");
+    }
+    if (parsedWeeks < 0) {
+      return showAlert("Las semanas sin movimiento deben ser 0 o más", "error");
     }
 
     const payload = {
@@ -276,7 +299,9 @@ export default function ProductsPage() {
       precioRuta: Number(form.precioRuta),
       stockActual: parsedStockActual,
       stockNoDisponible: parsedStockUnavailable || 0,
-      stockMinimo: Number(form.stockMinimo || 0),
+      stockMinimo: parsedStockMinimo,
+      stockMaximo: parsedStockMaximo,
+      semanasMaxSinMovimiento: parsedWeeks,
       suplidorId: form.suplidorId || undefined,
       disponible: form.disponible === "disponible",
     };
@@ -337,7 +362,7 @@ export default function ProductsPage() {
         ? `${product.marcaNombre}${modelLabel ? ` • ${modelLabel}` : ""}`
         : modelLabel || "—";
     })(),
-    `${product.stockActual} (mín. ${product.stockMinimo})`,
+    `${product.stockActual} (mín. ${product.stockMinimo} / máx. ${product.stockMaximo})`,
     formatCurrency(product.precioTienda),
     formatCurrency(product.precioRuta),
     (() => {
@@ -426,8 +451,8 @@ export default function ProductsPage() {
           <div>
             <p className="text-xs uppercase text-slate-400">Stock</p>
             <p className="text-sm text-slate-900">
-              {detailProduct.stockActual} unidades (mínimo{" "}
-              {detailProduct.stockMinimo})
+              {detailProduct.stockActual} unidades (mín. {detailProduct.stockMinimo} / máx.{" "}
+              {detailProduct.stockMaximo})
             </p>
             <p className="text-xs text-slate-500">
               Disponibles: {getAvailableUnits(detailProduct)} • Inactivas:{" "}
@@ -450,6 +475,22 @@ export default function ProductsPage() {
             <p className="text-xs uppercase text-slate-400">Descripción</p>
             <p className="text-sm text-slate-900">
               {detailProduct.descripcion ?? "Sin descripción"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-slate-400">
+              Semanas sin movimiento
+            </p>
+            <p className="text-sm text-slate-900">
+              {detailProduct.semanasMaxSinMovimiento
+                ? `${detailProduct.semanasMaxSinMovimiento} semana(s)`
+                : "Sin control"}
+            </p>
+            <p className="text-xs text-slate-500">
+              Último movimiento:{" "}
+              {detailProduct.ultimaFechaMovimiento
+                ? new Date(detailProduct.ultimaFechaMovimiento).toLocaleDateString()
+                : "No registrado"}
             </p>
           </div>
         </div>
@@ -607,7 +648,7 @@ export default function ProductsPage() {
       </div>
       <div>
         <p className="text-xs uppercase text-slate-400">Precios y cantidades</p>
-        <div className="mt-3 grid gap-4 md:grid-cols-4">
+        <div className="mt-3 grid gap-4 md:grid-cols-3">
           <div>
             <label className="text-xs uppercase text-slate-500">
               Precio tienda <span className="text-red-500">*</span>
@@ -652,6 +693,8 @@ export default function ProductsPage() {
               }
             />
           </div>
+        </div>
+        <div className="mt-3 grid gap-4 md:grid-cols-3">
           <div>
             <label className="text-xs uppercase text-slate-500">
               Stock mínimo
@@ -663,6 +706,37 @@ export default function ProductsPage() {
               value={form.stockMinimo}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, stockMinimo: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="text-xs uppercase text-slate-500">
+              Stock máximo <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              min="1"
+              placeholder="Ej. 25"
+              value={form.stockMaximo}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, stockMaximo: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="text-xs uppercase text-slate-500">
+              Semanas sin movimiento
+            </label>
+            <Input
+              type="number"
+              min="0"
+              placeholder="Ej. 4"
+              value={form.semanasInactividad}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  semanasInactividad: e.target.value,
+                }))
               }
             />
           </div>
