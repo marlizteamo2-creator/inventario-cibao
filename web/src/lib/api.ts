@@ -423,10 +423,13 @@ export async function fetchPedidos(token: string) {
   });
 }
 
-export async function downloadSalidasReport(token: string, start: string, end: string) {
+export type ReportScope = "salidas" | "entradas" | "todo";
+
+export async function downloadMovimientosReport(token: string, start: string, end: string, scope: ReportScope = "salidas") {
   const url = new URL(`${API_URL}/salidas/report`);
   url.searchParams.set("start", start);
   url.searchParams.set("end", end);
+  url.searchParams.set("scope", scope);
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` }
