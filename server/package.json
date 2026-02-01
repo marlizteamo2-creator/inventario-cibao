@@ -6,7 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "seed": "tsx src/scripts/seedAdmin.ts"
+    "seed": "tsx src/scripts/seedAdmin.ts",
+    "pricing:backfill": "tsx src/scripts/backfillProductPricing.ts"
   },
   "dependencies": {
     "bcryptjs": "2.4.3",

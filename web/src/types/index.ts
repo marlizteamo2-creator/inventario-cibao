@@ -50,6 +50,35 @@ export type ProductType = {
   descripcion?: string | null;
 };
 
+export type PricingSettings = {
+  porcentajeTienda: number;
+  porcentajeRuta: number;
+  actualizadoEn: string | null;
+  actualizadoPor?: string | null;
+};
+
+export type ProductPricingOverride = {
+  id: string;
+  productoId: string;
+  producto: string;
+  porcentajeTienda: number | null;
+  porcentajeRuta: number | null;
+  actualizadoEn: string;
+  actualizadoPor?: string | null;
+  actualizadoPorNombre?: string | null;
+};
+
+export type ProductTypePricingOverride = {
+  id: string;
+  tipoId: string;
+  tipo: string;
+  porcentajeTienda: number | null;
+  porcentajeRuta: number | null;
+  actualizadoEn: string;
+  actualizadoPor?: string | null;
+  actualizadoPorNombre?: string | null;
+};
+
 export type Brand = {
   id: string;
   nombre: string;
@@ -80,6 +109,8 @@ export type SalidaDetalle = {
 export type Salida = {
   id: string;
   ticket: string;
+  ticket_numero?: number;
+  ticketNumero?: number;
   fecha_salida: string;
   fecha_entrega: string | null;
   total: number;
@@ -105,6 +136,7 @@ export type Pedido = {
   suplidorId: string;
   suplidor: string;
   cantidadSolicitada: number;
+  precioCosto?: number | null;
   fechaPedido: string;
   fechaEsperada: string | null;
   fechaRecibido: string | null;
@@ -133,6 +165,13 @@ export type Movimiento = {
   producto: string;
   usuarioId: string;
   usuario: string;
+  salidaId?: string | null;
+  detalleSalidaId?: string | null;
+};
+
+export type MovimientoDetalle = {
+  movimiento: Movimiento;
+  ticket: Salida | null;
 };
 
 export type SalidaStatus = {

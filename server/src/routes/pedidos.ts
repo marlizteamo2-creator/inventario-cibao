@@ -2,6 +2,7 @@ import express from "express";
 import type { Response } from "express";
 import { pool, query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
+import { applyPricingToProduct } from "../services/pricing";
 
 const pedidosRouter = express.Router();
 const adminRoles = ["Administrador"];
@@ -23,6 +24,7 @@ type CreatePedidoBody = {
   brandId?: string;
   modelId?: string;
   productNameHint?: string | null;
+  precioCosto?: number;
 };
 
 type UpdatePedidoBody = {
@@ -30,6 +32,7 @@ type UpdatePedidoBody = {
   cantidadSolicitada?: number;
   fechaEsperada?: string | null;
   fechaRecibido?: string | null;
+  precioCosto?: number | null;
 };
 
 const baseSelect = `
@@ -47,6 +50,7 @@ const baseSelect = `
     p.id_suplidor,
     s.nombre_empresa AS suplidor,
     p.cantidad_solicitada,
+    p.precio_costo,
     p.fecha_pedido,
     p.fecha_esperada,
     p.fecha_recibido,
@@ -95,6 +99,7 @@ const mapPedido = (row: any) => ({
   suplidorId: row.id_suplidor,
   suplidor: row.suplidor,
   cantidadSolicitada: row.cantidad_solicitada,
+  precioCosto: row.precio_costo !== null ? Number(row.precio_costo) : null,
   fechaPedido: row.fecha_pedido,
   fechaEsperada: row.fecha_esperada,
   fechaRecibido: row.fecha_recibido,
@@ -234,7 +239,8 @@ pedidosRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReques
       productTypeId,
       brandId,
       modelId,
-      productNameHint
+      productNameHint,
+      precioCosto
     } = (req.body ?? {}) as CreatePedidoBody;
     const tokenUser = req.user;
 
@@ -252,6 +258,15 @@ pedidosRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReques
 
     if (cantidadSolicitada <= 0) {
       return res.status(400).json({ message: "La cantidad debe ser mayor a 0" });
+    }
+
+    let finalPrecioCosto: number | null = null;
+    if (precioCosto !== undefined) {
+      const numericCosto = Number(precioCosto);
+      if (!Number.isFinite(numericCosto) || numericCosto < 0) {
+        return res.status(400).json({ message: "El precio de costo debe ser un número válido" });
+      }
+      finalPrecioCosto = numericCosto;
     }
 
     const { rowCount: supplierExists } = await query(`SELECT 1 FROM suplidores WHERE id_suplidor = $1`, [supplierId]);
@@ -369,9 +384,10 @@ pedidosRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReques
          id_tipo_producto,
          id_marca,
          id_modelo,
-         nombre_producto
+         nombre_producto,
+         precio_costo
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id_pedido`,
       [
         finalProductId,
@@ -383,7 +399,8 @@ pedidosRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReques
         referenceTipo,
         referenceMarca,
         referenceModelo,
-        referenceNombre
+        referenceNombre,
+        finalPrecioCosto
       ]
     );
 
@@ -452,8 +469,9 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
       id_modelo: string | null;
       nombre_producto: string | null;
       id_suplidor: string;
+      precio_costo: number | null;
     }>(
-      `SELECT id_producto, cantidad_solicitada, estado, id_tipo_producto, id_marca, id_modelo, nombre_producto, id_suplidor
+      `SELECT id_producto, cantidad_solicitada, estado, id_tipo_producto, id_marca, id_modelo, nombre_producto, id_suplidor, precio_costo
        FROM pedidos_suplidores
        WHERE id_pedido = $1
        FOR UPDATE`,
@@ -467,6 +485,7 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
     }
 
     const current = currentRows[0];
+    let targetPrecioCosto = current.precio_costo !== null ? Number(current.precio_costo) : null;
 
     if (current.estado === "recibido" && body.cantidadSolicitada !== undefined && !body.estado) {
       await client.query("ROLLBACK");
@@ -525,6 +544,22 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
       const value = normalizeDateInput(fechaRecibidoValue) ?? null;
       updates.push(`fecha_recibido = $${updates.length + 1}`);
       params.push(value);
+    }
+
+    if (body.precioCosto !== undefined) {
+      let numericCosto: number | null = null;
+      if (body.precioCosto !== null) {
+        const parsed = Number(body.precioCosto);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(400).json({ message: "El precio de costo debe ser un número válido" });
+        }
+        numericCosto = parsed;
+      }
+      updates.push(`precio_costo = $${updates.length + 1}`);
+      params.push(numericCosto);
+      targetPrecioCosto = numericCosto;
     }
 
     if (!updates.length) {
@@ -611,6 +646,10 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
       ]);
     }
 
+    if (isRecibido && productIdForUpdate) {
+      await applyPricingToProduct(client, productIdForUpdate, targetPrecioCosto ?? undefined);
+    }
+
     if (wasRecibido && body.cantidadSolicitada !== undefined && isRecibido) {
       await client.query("ROLLBACK");
       client.release();
@@ -671,8 +710,18 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
       ]);
 
       await client.query(
-        `INSERT INTO movimientos_inv (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, id_usuario, observacion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO movimientos_inv (
+           id_producto,
+           tipo_movimiento,
+           cantidad,
+           stock_anterior,
+           stock_nuevo,
+           id_usuario,
+           observacion,
+           id_salida,
+           id_detalle_salida
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)`,
         [productIdForUpdate, movimientoTipo, movimientoCantidad, stockActual, nuevoStock, tokenUser.id, mensaje]
       );
     }

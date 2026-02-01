@@ -2,10 +2,14 @@ import {
   ApiError,
   LoginResponse,
   Movimiento,
+  MovimientoDetalle,
   Pedido,
   PedidoStatus,
   Product,
+  ProductPricingOverride,
   ProductType,
+  ProductTypePricingOverride,
+  PricingSettings,
   Supplier,
   Salida,
   Brand,
@@ -125,6 +129,75 @@ export async function updateProductType(
 
 export async function deleteProductType(token: string, id: string) {
   return apiFetch<void>(`/product-types/${id}`, {
+    method: "DELETE",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchPricingSettings(token: string) {
+  return apiFetch<PricingSettings>("/pricing/settings", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updatePricingSettings(
+  token: string,
+  payload: { tiendaPercent: number; rutaPercent: number }
+) {
+  return apiFetch<PricingSettings>("/pricing/settings", {
+    method: "PUT",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchPricingOverrides(token: string, search?: string) {
+  const trimmed = search?.trim();
+  const qs = trimmed ? `?search=${encodeURIComponent(trimmed)}` : "";
+  return apiFetch<ProductPricingOverride[]>(`/pricing/overrides${qs}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updatePricingOverride(
+  token: string,
+  productId: string,
+  payload: { tiendaPercent: number; rutaPercent: number }
+) {
+  return apiFetch<ProductPricingOverride>(`/pricing/overrides/${productId}`, {
+    method: "PUT",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deletePricingOverride(token: string, productId: string) {
+  return apiFetch<void>(`/pricing/overrides/${productId}`, {
+    method: "DELETE",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchPricingTypeOverrides(token: string) {
+  return apiFetch<ProductTypePricingOverride[]>("/pricing/type-overrides", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updatePricingTypeOverride(
+  token: string,
+  typeId: string,
+  payload: { tiendaPercent: number; rutaPercent: number }
+) {
+  return apiFetch<ProductTypePricingOverride>(`/pricing/type-overrides/${typeId}`, {
+    method: "PUT",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deletePricingTypeOverride(token: string, typeId: string) {
+  return apiFetch<void>(`/pricing/type-overrides/${typeId}`, {
     method: "DELETE",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
@@ -260,8 +333,29 @@ export async function updateProduct(
   });
 }
 
-export async function fetchSalidas(token: string) {
-  return apiFetch<Salida[]>("/salidas", {
+export async function fetchSalidas(
+  token: string,
+  filters?: { estado?: string; vendedorId?: string; from?: string; to?: string; ticket?: string }
+) {
+  const params = new URLSearchParams();
+  if (filters?.estado) {
+    params.set("estado", filters.estado);
+  }
+  if (filters?.vendedorId) {
+    params.set("vendedorId", filters.vendedorId);
+  }
+  if (filters?.from) {
+    params.set("from", filters.from);
+  }
+  if (filters?.to) {
+    params.set("to", filters.to);
+  }
+  if (filters?.ticket) {
+    params.set("ticket", filters.ticket);
+  }
+  const query = params.toString();
+  const search = query ? `?${query}` : "";
+  return apiFetch<Salida[]>(`/salidas${search}`, {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
@@ -454,6 +548,7 @@ export async function createPedido(
     brandId: string;
     modelId: string;
     productNameHint?: string;
+    precioCosto?: number;
   }
 ) {
   return apiFetch<Pedido>("/pedidos", {
@@ -466,7 +561,13 @@ export async function createPedido(
 export async function updatePedido(
   token: string,
   id: string,
-  payload: { estado?: string; cantidadSolicitada?: number; fechaEsperada?: string | null; fechaRecibido?: string | null }
+  payload: {
+    estado?: string;
+    cantidadSolicitada?: number;
+    fechaEsperada?: string | null;
+    fechaRecibido?: string | null;
+    precioCosto?: number | null;
+  }
 ) {
   return apiFetch<Pedido>(`/pedidos/${id}`, {
     method: "PATCH",
@@ -489,6 +590,12 @@ export async function fetchMovimientos(
   }
   const query = params.size ? `?${params.toString()}` : "";
   return apiFetch<Movimiento[]>(`/movimientos${query}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchMovimientoDetalle(token: string, id: string) {
+  return apiFetch<MovimientoDetalle>(`/movimientos/${id}/detail`, {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
