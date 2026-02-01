@@ -17,6 +17,7 @@ import productTypesRouter from "./routes/productTypes";
 import brandsRouter from "./routes/brands";
 import modelsRouter from "./routes/models";
 import rolesRouter from "./routes/roles";
+import pricingRouter from "./routes/pricing";
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use("/salida-statuses", salidaStatusesRouter);
 app.use("/pedido-statuses", pedidoStatusesRouter);
 app.use("/pedidos", pedidosRouter);
 app.use("/movimientos", movimientosRouter);
+app.use("/pricing", pricingRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error", err);

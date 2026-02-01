@@ -64,8 +64,9 @@ CREATE TABLE IF NOT EXISTS productos (
   id_tipo_producto UUID NOT NULL REFERENCES tipos_producto(id_tipo),
   id_marca UUID REFERENCES marcas(id_marca),
   id_modelo UUID REFERENCES modelos(id_modelo),
-  precio_tienda NUMERIC(10,2) NOT NULL,
-  precio_ruta NUMERIC(10,2) NOT NULL,
+  precio_tienda NUMERIC(10,2),
+  precio_ruta NUMERIC(10,2),
+  precio_costo NUMERIC(14,2),
   stock_actual INTEGER NOT NULL DEFAULT 0,
   stock_no_disponible INTEGER NOT NULL DEFAULT 0,
   stock_minimo INTEGER NOT NULL DEFAULT 0,
@@ -159,11 +160,44 @@ CREATE TABLE IF NOT EXISTS pedidos_suplidores (
   nombre_producto VARCHAR(200),
   id_suplidor UUID NOT NULL REFERENCES suplidores(id_suplidor),
   cantidad_solicitada INTEGER NOT NULL,
+  precio_costo NUMERIC(12,2),
   fecha_pedido TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   fecha_esperada DATE,
   fecha_recibido DATE,
   estado VARCHAR(50) NOT NULL,
   id_usuario_solicita UUID NOT NULL REFERENCES usuarios(id_usuario)
+);
+
+CREATE TABLE IF NOT EXISTS pricing_settings (
+  id SERIAL PRIMARY KEY,
+  porcentaje_tienda NUMERIC(6,3) NOT NULL DEFAULT 40,
+  porcentaje_ruta NUMERIC(6,3) NOT NULL DEFAULT 40,
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_por UUID REFERENCES usuarios(id_usuario)
+);
+
+INSERT INTO pricing_settings (id, porcentaje_tienda, porcentaje_ruta)
+VALUES (1, 40, 40)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS product_pricing_overrides (
+  id_override UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_producto UUID NOT NULL REFERENCES productos(id_producto) ON DELETE CASCADE,
+  porcentaje_tienda NUMERIC(6,3),
+  porcentaje_ruta NUMERIC(6,3),
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_por UUID REFERENCES usuarios(id_usuario),
+  CONSTRAINT product_pricing_overrides_producto_unique UNIQUE (id_producto)
+);
+
+CREATE TABLE IF NOT EXISTS product_type_pricing_overrides (
+  id_override UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_tipo_producto UUID NOT NULL REFERENCES tipos_producto(id_tipo) ON DELETE CASCADE,
+  porcentaje_tienda NUMERIC(6,3),
+  porcentaje_ruta NUMERIC(6,3),
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_por UUID REFERENCES usuarios(id_usuario),
+  CONSTRAINT product_type_pricing_overrides_tipo_unique UNIQUE (id_tipo_producto)
 );
 
 DO $$
@@ -192,6 +226,8 @@ CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos_inv(fecha_movimi
 CREATE INDEX IF NOT EXISTS idx_movimientos_id_salida ON movimientos_inv(id_salida);
 CREATE INDEX IF NOT EXISTS idx_movimientos_id_detalle_salida ON movimientos_inv(id_detalle_salida);
 CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_esperada ON pedidos_suplidores(fecha_esperada);
+CREATE INDEX IF NOT EXISTS idx_product_pricing_overrides_producto ON product_pricing_overrides(id_producto);
+CREATE INDEX IF NOT EXISTS idx_type_pricing_overrides_tipo ON product_type_pricing_overrides(id_tipo_producto);
 
 -- Datos base opcionales -------------------------------------------------------------
 INSERT INTO roles (nombre_rol, descripcion)
