@@ -32,6 +32,7 @@ export type Product = {
   modeloNombre?: string | null;
   precioTienda: number;
   precioRuta: number;
+  precioCosto?: number | null;
   stockActual: number;
   stockNoDisponible?: number;
   stockMinimo: number;

@@ -287,6 +287,7 @@ export async function createProduct(
     modeloNombre?: string;
     precioTienda: number;
     precioRuta: number;
+    precioCosto?: number | null;
     stockActual: number;
     stockNoDisponible?: number;
     stockMinimo: number;
@@ -316,6 +317,7 @@ export async function updateProduct(
     modeloNombre?: string;
     precioTienda?: number;
     precioRuta?: number;
+    precioCosto?: number | null;
     stockActual?: number;
     stockNoDisponible?: number;
     stockMinimo?: number;

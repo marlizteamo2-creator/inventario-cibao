@@ -9,7 +9,7 @@ import SearchableSelect from "@/components/ui/SearchableSelect";
 import StatsGrid from "@/components/dashboard/StatsGrid";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
-import { Product, Supplier, ProductType, Brand, Model } from "@/types";
+import { Product, Supplier, ProductType, Brand, Model, ProductTypePricingOverride } from "@/types";
 import {
   createProduct,
   updateProduct,
@@ -18,12 +18,15 @@ import {
   fetchProductTypes,
   fetchBrands,
   fetchModels,
-  createBrand
+  createBrand,
+  fetchPricingSettings,
+  fetchPricingTypeOverrides
 } from "@/lib/api";
 import { Layers, PackageOpen, TrendingDown, X } from "lucide-react";
 import Alert from "@/components/ui/Alert";
+import { formatMoneyInput, formatMoneyFromNumber, parseMoneyInput } from "@/utils/money";
 
-const initialFormState = {
+const getInitialFormState = () => ({
   nombre: "",
   descripcion: "",
   tipoId: "",
@@ -32,6 +35,7 @@ const initialFormState = {
   modeloNombre: "",
   precioTienda: "",
   precioRuta: "",
+  precioCosto: "",
   stockActual: "",
   stockNoDisponible: "",
   stockMinimo: "",
@@ -39,7 +43,7 @@ const initialFormState = {
   semanasInactividad: "",
   suplidorId: "",
   disponible: "disponible" as "disponible" | "no-disponible",
-};
+});
 
 export default function ProductsPage() {
   const { token, role } = useAuth();
@@ -60,13 +64,20 @@ export default function ProductsPage() {
     }
     setAlert({ message: text, variant });
   };
-  const [form, setForm] = useState(initialFormState);
+  const [form, setForm] = useState(getInitialFormState);
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [filterType, setFilterType] = useState("");
   const [filterBrand, setFilterBrand] = useState("");
   const [filterSearch, setFilterSearch] = useState("");
+  const [pricingSettingsState, setPricingSettingsState] = useState<{ tienda: number; ruta: number }>({
+    tienda: 0,
+    ruta: 0,
+  });
+  const [typePricingOverrides, setTypePricingOverrides] = useState<
+    Record<string, { tienda: number | null; ruta: number | null }>
+  >({});
   const isAdmin = role === "Administrador";
   const isEditing = Boolean(editingProductId);
 
@@ -113,16 +124,45 @@ export default function ProductsPage() {
     if (!token) return;
     const loadAuxData = async () => {
       try {
-        const [typesData, brandsData, suppliersData] = await Promise.all([
+        const suppliersPromise = isAdmin ? fetchSuppliers(token) : Promise.resolve([] as Supplier[]);
+        const pricingSettingsPromise = isAdmin ? fetchPricingSettings(token) : Promise.resolve(null);
+        const typeOverridesPromise = isAdmin
+          ? fetchPricingTypeOverrides(token)
+          : Promise.resolve([] as ProductTypePricingOverride[]);
+
+        const [typesData, brandsData, suppliersData, settingsData, typeOverridesData] = await Promise.all([
           fetchProductTypes(token),
           fetchBrands(token),
-          isAdmin ? fetchSuppliers(token) : Promise.resolve([] as Supplier[]),
+          suppliersPromise,
+          pricingSettingsPromise,
+          typeOverridesPromise,
         ]);
+
         setProductTypes(typesData);
         setBrands(brandsData);
         if (isAdmin) {
           setSuppliers(suppliersData as Supplier[]);
         }
+
+        if (settingsData) {
+          setPricingSettingsState({
+            tienda: settingsData.porcentajeTienda,
+            ruta: settingsData.porcentajeRuta,
+          });
+        }
+
+        const overridesList = (typeOverridesData ?? []) as ProductTypePricingOverride[];
+        const overridesMap = overridesList.reduce(
+          (acc, override) => {
+            acc[override.tipoId] = {
+              tienda: override.porcentajeTienda,
+              ruta: override.porcentajeRuta,
+            };
+            return acc;
+          },
+          {} as Record<string, { tienda: number | null; ruta: number | null }>
+        );
+        setTypePricingOverrides(overridesMap);
       } catch (error) {
         showAlert((error as Error).message, "error");
       }
@@ -175,7 +215,7 @@ export default function ProductsPage() {
   );
 
   const resetFormState = () => {
-    setForm(initialFormState);
+    setForm(getInitialFormState());
     setEditingProductId(null);
     setNewBrandName("");
   };
@@ -184,6 +224,21 @@ export default function ProductsPage() {
     resetFormState();
     setShowFormModal(true);
   };
+
+  const activeMargins = useMemo(() => {
+    let tienda = pricingSettingsState.tienda;
+    let ruta = pricingSettingsState.ruta;
+    if (form.tipoId && typePricingOverrides[form.tipoId]) {
+      const override = typePricingOverrides[form.tipoId];
+      if (override.tienda !== null && override.tienda !== undefined) {
+        tienda = override.tienda;
+      }
+      if (override.ruta !== null && override.ruta !== undefined) {
+        ruta = override.ruta;
+      }
+    }
+    return { tienda, ruta };
+  }, [pricingSettingsState, typePricingOverrides, form.tipoId]);
 
   const openEditModal = (product: Product) => {
     setEditingProductId(product.id);
@@ -196,6 +251,7 @@ export default function ProductsPage() {
       modeloNombre: "",
       precioTienda: product.precioTienda?.toString() ?? "",
       precioRuta: product.precioRuta?.toString() ?? "",
+      precioCosto: formatMoneyFromNumber(product.precioCosto),
       stockActual: product.stockActual?.toString() ?? "",
       stockNoDisponible: product.stockNoDisponible?.toString() ?? "",
       stockMinimo: product.stockMinimo?.toString() ?? "",
@@ -228,6 +284,36 @@ export default function ProductsPage() {
     });
     return (value: number) => `RD$ ${formatter.format(value)}`;
   }, []);
+
+  useEffect(() => {
+    const hasCostoInput = Boolean(form.precioCosto && form.precioCosto.trim().length);
+    if (!hasCostoInput) {
+      if (!isEditing) {
+        setForm((prev) => {
+          if (!prev.precioTienda && !prev.precioRuta) {
+            return prev;
+          }
+          return { ...prev, precioTienda: "", precioRuta: "" };
+        });
+      }
+      return;
+    }
+
+    const costoValue = parseMoneyInput(form.precioCosto);
+    if (costoValue === null || !Number.isFinite(costoValue) || costoValue < 0) {
+      return;
+    }
+
+    const tiendaValue = (costoValue * (1 + activeMargins.tienda / 100)).toFixed(2);
+    const rutaValue = (costoValue * (1 + activeMargins.ruta / 100)).toFixed(2);
+
+    setForm((prev) => {
+      if (prev.precioTienda === tiendaValue && prev.precioRuta === rutaValue) {
+        return prev;
+      }
+      return { ...prev, precioTienda: tiendaValue, precioRuta: rutaValue };
+    });
+  }, [form.precioCosto, activeMargins.tienda, activeMargins.ruta, isEditing]);
 
   const handleSubmit = async () => {
     if (!token || !isAdmin) return;
@@ -283,7 +369,41 @@ export default function ProductsPage() {
       return showAlert("Las semanas sin movimiento deben ser 0 o más", "error");
     }
 
-    const payload = {
+    const rawCostoInput = form.precioCosto?.trim() ?? "";
+    const parsedCostoValue = rawCostoInput ? parseMoneyInput(rawCostoInput) : null;
+    if (rawCostoInput && (parsedCostoValue === null || !Number.isFinite(parsedCostoValue) || parsedCostoValue < 0)) {
+      return showAlert("Ingresa un precio de costo válido (0 o mayor).", "error");
+    }
+    if (!isEditing && (parsedCostoValue === null || parsedCostoValue <= 0)) {
+      return showAlert("Ingresa el precio de costo para calcular los precios", "error");
+    }
+    const precioTiendaNumber = Number(form.precioTienda || 0);
+    const precioRutaNumber = Number(form.precioRuta || 0);
+    if (
+      (parsedCostoValue !== null || !isEditing) &&
+      (Number.isNaN(precioTiendaNumber) || Number.isNaN(precioRutaNumber))
+    ) {
+      return showAlert("No se pudieron calcular los precios. Verifica el precio de costo y los porcentajes.", "error");
+    }
+
+    const payload: {
+      nombre: string;
+      descripcion?: string;
+      tipoId: string;
+      marcaId: string;
+      modeloId?: string;
+      modeloNombre?: string;
+      precioTienda: number;
+      precioRuta: number;
+      precioCosto?: number | null;
+      stockActual: number;
+      stockNoDisponible?: number;
+      stockMinimo: number;
+      stockMaximo: number;
+      semanasMaxSinMovimiento?: number;
+      suplidorId?: string;
+      disponible: boolean;
+    } = {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim() || undefined,
       tipoId: trimmedTipo,
@@ -292,8 +412,8 @@ export default function ProductsPage() {
       modeloNombre: !form.modeloId
         ? form.modeloNombre.trim() || undefined
         : undefined,
-      precioTienda: Number(form.precioTienda),
-      precioRuta: Number(form.precioRuta),
+      precioTienda: precioTiendaNumber,
+      precioRuta: precioRutaNumber,
       stockActual: parsedStockActual,
       stockNoDisponible: parsedStockUnavailable || 0,
       stockMinimo: parsedStockMinimo,
@@ -302,6 +422,12 @@ export default function ProductsPage() {
       suplidorId: form.suplidorId || undefined,
       disponible: form.disponible === "disponible",
     };
+
+    if (rawCostoInput && parsedCostoValue !== null) {
+      payload.precioCosto = parsedCostoValue;
+    } else if (isEditing && !rawCostoInput) {
+      payload.precioCosto = null;
+    }
 
     try {
       if (editingProductId) {
@@ -645,7 +771,36 @@ export default function ProductsPage() {
       </div>
       <div>
         <p className="text-xs uppercase text-slate-400">Precios y cantidades</p>
-        <div className="mt-3 grid gap-4 md:grid-cols-3">
+        <p className="mt-2 text-xs text-slate-500">
+          Define el costo para calcular automáticamente los precios de tienda y ruta según los porcentajes configurados.
+        </p>
+        <div className="mt-3 grid gap-4 md:grid-cols-4">
+          <div>
+            <label className="text-xs uppercase text-slate-500">
+              Precio costo <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                RD$
+              </span>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="Ej. 25,000.00"
+                className="mt-1 pl-14"
+                value={form.precioCosto}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    precioCosto: formatMoneyInput(event.target.value),
+                  }))
+                }
+              />
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Margen actual: tienda {activeMargins.tienda.toFixed(2)}% • ruta {activeMargins.ruta.toFixed(2)}%
+            </p>
+          </div>
           <div>
             <label className="text-xs uppercase text-slate-500">Precio tienda</label>
             <Input

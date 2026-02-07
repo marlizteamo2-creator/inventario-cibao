@@ -777,20 +777,22 @@ export default function PedidosPage() {
               searchPlaceholder="Buscar producto"
             />
           </div>
-          <div>
-            <label className="text-xs uppercase text-slate-400">Suplidor</label>
-            <SearchableSelect
-              value={filterSupplier}
-              onChange={(value) => setFilterSupplier(value)}
-              options={supplierOptionsWithAll}
-              placeholder="Todos"
-              searchPlaceholder="Buscar suplidor"
-            />
-          </div>
+          {canManage && (
+            <div>
+              <label className="text-xs uppercase text-slate-400">Suplidor</label>
+              <SearchableSelect
+                value={filterSupplier}
+                onChange={(value) => setFilterSupplier(value)}
+                options={supplierOptionsWithAll}
+                placeholder="Todos"
+                searchPlaceholder="Buscar suplidor"
+              />
+            </div>
+          )}
           <div>
             <label className="text-xs uppercase text-slate-400">Búsqueda manual</label>
             <Input
-              placeholder="Producto o suplidor"
+              placeholder={canManage ? "Producto o suplidor" : "Producto"}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
@@ -833,15 +835,15 @@ export default function PedidosPage() {
               <thead className="text-xs uppercase text-slate-400">
                 <tr>
                   <th className="px-4 py-2">Producto</th>
-                  <th className="px-4 py-2">Suplidor</th>
+                  {canManage && <th className="px-4 py-2">Suplidor</th>}
                   <th className="px-4 py-2">Cantidad</th>
-                  <th className="px-4 py-2">Precio unitario</th>
-                  <th className="px-4 py-2">Total pedido</th>
+                  {canManage && <th className="px-4 py-2">Precio unitario</th>}
+                  {canManage && <th className="px-4 py-2">Total pedido</th>}
                   <th className="px-4 py-2">Estado</th>
                   <th className="px-4 py-2">Esperado</th>
                   <th className="px-4 py-2">Recibido</th>
                   <th className="px-4 py-2">Solicitud</th>
-                  <th className="px-4 py-2">Solicitado por</th>
+                  {canManage && <th className="px-4 py-2">Solicitado por</th>}
                   {canManage && <th className="px-4 py-2 text-center">Acciones</th>}
                 </tr>
               </thead>
@@ -849,18 +851,22 @@ export default function PedidosPage() {
                 {filteredPedidos.map((pedido) => (
                   <tr key={pedido.id} className="border-t border-slate-100">
                     <td className="px-4 py-2 font-medium text-slate-800">{pedido.producto}</td>
-                    <td className="px-4 py-2 text-slate-600">{pedido.suplidor}</td>
+                    {canManage && <td className="px-4 py-2 text-slate-600">{pedido.suplidor}</td>}
                     <td className="px-4 py-2 text-slate-600">{pedido.cantidadSolicitada}</td>
-                    <td className="px-4 py-2 text-slate-600">
-                      {pedido.precioCosto !== null && pedido.precioCosto !== undefined
-                        ? `RD$ ${currencyFormatter.format(pedido.precioCosto)}`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-slate-600">
-                      {pedido.precioCosto !== null && pedido.precioCosto !== undefined
-                        ? `RD$ ${currencyFormatter.format(pedido.precioCosto * pedido.cantidadSolicitada)}`
-                        : "—"}
-                    </td>
+                    {canManage && (
+                      <td className="px-4 py-2 text-slate-600">
+                        {pedido.precioCosto !== null && pedido.precioCosto !== undefined
+                          ? `RD$ ${currencyFormatter.format(pedido.precioCosto)}`
+                          : "—"}
+                      </td>
+                    )}
+                    {canManage && (
+                      <td className="px-4 py-2 text-slate-600">
+                        {pedido.precioCosto !== null && pedido.precioCosto !== undefined
+                          ? `RD$ ${currencyFormatter.format(pedido.precioCosto * pedido.cantidadSolicitada)}`
+                          : "—"}
+                      </td>
+                    )}
                     <td className="px-4 py-2">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusClasses[pedido.estado] ?? "bg-slate-100 text-slate-600"}`}
@@ -871,7 +877,7 @@ export default function PedidosPage() {
                     <td className="px-4 py-2 text-slate-600">{formatDate(pedido.fechaEsperada)}</td>
                     <td className="px-4 py-2 text-slate-600">{formatDate(pedido.fechaRecibido)}</td>
                     <td className="px-4 py-2 text-slate-600">{formatDate(pedido.fechaPedido)}</td>
-                    <td className="px-4 py-2 text-slate-600">{pedido.solicitadoPor ?? "—"}</td>
+                    {canManage && <td className="px-4 py-2 text-slate-600">{pedido.solicitadoPor ?? "—"}</td>}
                     {canManage && (
                       <td className="px-4 py-2">
                         <div className="flex flex-col gap-3">
