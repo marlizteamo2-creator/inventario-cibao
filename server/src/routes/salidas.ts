@@ -3,7 +3,8 @@ import type { Response } from "express";
 import type { PoolClient } from "pg";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 import { pool, query } from "../db/pool";
-import { sendSaleNotificationEmail } from "../services/mailer";
+import { sendSaleNotificationEmail, sendVendorSaleCreatedEmail, sendVendorSaleStatusEmail } from "../services/mailer";
+import { getAdminEmails, getUserFullName } from "../services/userDirectory";
 
 const salidasRouter = express.Router();
 const allowedRoles = ["Administrador", "Vendedor"];
@@ -50,26 +51,6 @@ const getActiveStates = async () => {
   return rows.map((row) => row.nombre);
 };
 
-const getAdminEmails = async () => {
-  const { rows } = await query(
-    `SELECT u.email
-     FROM usuarios u
-     INNER JOIN roles r ON r.id_rol = u.id_rol
-     WHERE r.nombre_rol = 'Administrador' AND u.activo = true`
-  );
-  return rows.map((row) => row.email as string).filter(Boolean);
-};
-
-const getUserFullName = async (userId: string) => {
-  const { rows } = await query(`SELECT nombre, apellido FROM usuarios WHERE id_usuario = $1 LIMIT 1`, [userId]);
-  if (!rows.length) {
-    return null;
-  }
-  const nombre = rows[0].nombre ?? "";
-  const apellido = rows[0].apellido ?? "";
-  return `${nombre} ${apellido}`.trim() || nombre || apellido || null;
-};
-
 type SaleNotificationData = {
   ticket: string;
   total: number;
@@ -93,6 +74,83 @@ const notifyAdminsOfSale = async (data: SaleNotificationData) => {
   } catch (error) {
     console.error("No se pudo notificar a administradores sobre la salida", error);
   }
+};
+
+const notifyVendorOfNewSale = async (email: string | null | undefined, data: SaleNotificationData) => {
+  if (!email) {
+    return;
+  }
+  try {
+    await sendVendorSaleCreatedEmail({
+      to: email,
+      ...data
+    });
+  } catch (error) {
+    console.error(`No se pudo notificar al vendedor ${email} sobre la salida`, error);
+  }
+};
+
+const notifyVendorOfSaleStatus = async (email: string | null | undefined, data: SaleNotificationData) => {
+  if (!email) {
+    return;
+  }
+  try {
+    await sendVendorSaleStatusEmail({
+      to: email,
+      ...data
+    });
+  } catch (error) {
+    console.error(`No se pudo notificar al vendedor ${email} sobre la actualización de salida`, error);
+  }
+};
+
+const fetchSaleEmailData = async (salidaId: string) => {
+  const { rows } = await query(
+    `SELECT s.ticket,
+            s.total,
+            s.estado,
+            s.tipo_venta,
+            s.fecha_salida,
+            u.nombre,
+            u.apellido,
+            u.email
+     FROM salidas_alm s
+     INNER JOIN usuarios u ON u.id_usuario = s.id_vendedor
+     WHERE s.id_salida = $1
+     LIMIT 1`,
+    [salidaId]
+  );
+  const sale = rows.at(0);
+  if (!sale) {
+    return null;
+  }
+  const { rows: detailRows } = await query(
+    `SELECT p.nombre,
+            d.cantidad,
+            d.precio_unitario,
+            d.subtotal
+     FROM detalle_salidas d
+     LEFT JOIN productos p ON p.id_producto = d.id_producto
+     WHERE d.id_salida = $1`,
+    [salidaId]
+  );
+  return {
+    email: sale.email as string | null,
+    data: {
+      ticket: sale.ticket as string,
+      total: Number(sale.total ?? 0),
+      estado: sale.estado as string,
+      tipoVenta: sale.tipo_venta as string,
+      vendedor: `${sale.nombre ?? ""} ${sale.apellido ?? ""}`.trim() || (sale.email as string),
+      fecha: sale.fecha_salida,
+      detalles: detailRows.map((detail) => ({
+        nombre: detail.nombre ?? "Producto",
+        cantidad: Number(detail.cantidad ?? 0),
+        precioUnitario: Number(detail.precio_unitario ?? 0),
+        subtotal: Number(detail.subtotal ?? 0)
+      }))
+    } satisfies SaleNotificationData
+  };
 };
 
 const normalizeEstadoForTicket = (estado: string) => {
@@ -282,6 +340,15 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
       fecha: salidaInsert.rows[0].fecha_salida,
       detalles: details
     });
+    void notifyVendorOfNewSale(tokenUser.email, {
+      ticket: ticketCode,
+      total,
+      estado,
+      tipoVenta,
+      vendedor: vendedorNombre,
+      fecha: salidaInsert.rows[0].fecha_salida,
+      detalles: details
+    });
 
     return res.status(201).json({
       id: salidaId,
@@ -332,6 +399,7 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
     const params: Array<any> = [];
     let nextTicketNumber: number | null = null;
     let nextTicketCode: string | null = null;
+    let estadoChanged = false;
 
     if (estado !== undefined) {
       const estadosDisponibles = await getActiveStates();
@@ -342,6 +410,7 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
       updates.push(`estado = $${updates.length + 1}`);
       params.push(estado);
       if (estado !== currentEstado) {
+        estadoChanged = true;
         const ticketData = await assignTicketData(estado, client);
         nextTicketNumber = ticketData.ticketNumber;
         nextTicketCode = ticketData.ticketCode;
@@ -375,6 +444,13 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
     }
 
     await client.query("COMMIT");
+
+    if (estadoChanged) {
+      const result = await fetchSaleEmailData(id);
+      if (result) {
+        void notifyVendorOfSaleStatus(result.email, result.data);
+      }
+    }
 
     res.json({
       message: "Salida actualizada",

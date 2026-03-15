@@ -3,6 +3,8 @@ import type { Response } from "express";
 import { pool, query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 import { applyPricingToProduct } from "../services/pricing";
+import { sendEntryNotificationEmail } from "../services/mailer";
+import { getAdminEmails, getUserFullName } from "../services/userDirectory";
 
 const pedidosRouter = express.Router();
 const adminRoles = ["Administrador"];
@@ -122,6 +124,27 @@ async function fetchDefaultPedidoState() {
   const states = await fetchActivePedidoStates();
   return states.at(0) ?? null;
 }
+
+const notifyAdminsOfEntry = async (data: {
+  producto: string;
+  cantidad: number;
+  pedidoId: string;
+  responsable: string;
+  fecha: Date | string;
+}) => {
+  try {
+    const recipients = await getAdminEmails();
+    if (!recipients.length) {
+      return;
+    }
+    await sendEntryNotificationEmail({
+      recipients,
+      ...data
+    });
+  } catch (error) {
+    console.error("No se pudo enviar correo de entrada a administradores", error);
+  }
+};
 
 /**
  * @openapi
@@ -658,14 +681,16 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         .json({ message: "Cambia el estado del pedido antes de modificar la cantidad recibida." });
     }
 
+    let entryNotificationData: { productName: string; quantity: number } | null = null;
+
     if (shouldApplyStock || shouldRevertStock) {
       if (!productIdForUpdate) {
         await client.query("ROLLBACK");
         client.release();
         return res.status(400).json({ message: "Producto asociado no encontrado" });
       }
-      const productResult = await client.query<{ stock_actual: number; stock_maximo: number }>(
-        `SELECT stock_actual, stock_maximo FROM productos WHERE id_producto = $1 FOR UPDATE`,
+      const productResult = await client.query<{ stock_actual: number; stock_maximo: number; nombre: string }>(
+        `SELECT stock_actual, stock_maximo, nombre FROM productos WHERE id_producto = $1 FOR UPDATE`,
         [productIdForUpdate]
       );
       if (!productResult.rowCount) {
@@ -685,6 +710,10 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
         movimientoCantidad = targetCantidad;
         movimientoTipo = "entrada";
         mensaje = `Pedido ${id} recibido`;
+        entryNotificationData = {
+          productName: productResult.rows[0].nombre ?? `Producto ${productIdForUpdate}`,
+          quantity: targetCantidad
+        };
 
         if (!Number.isNaN(stockMaximoActual) && stockMaximoActual > 0 && nuevoStock > stockMaximoActual) {
           await client.query("ROLLBACK");
@@ -728,6 +757,17 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
 
     await client.query("COMMIT");
     client.release();
+
+    if (entryNotificationData) {
+      const responsableNombre = (await getUserFullName(tokenUser.id)) ?? tokenUser.email ?? "Usuario";
+      void notifyAdminsOfEntry({
+        producto: entryNotificationData.productName,
+        cantidad: entryNotificationData.quantity,
+        pedidoId: id,
+        responsable: responsableNombre,
+        fecha: new Date()
+      });
+    }
 
     const pedido = await fetchPedidoById(id);
     return res.json(pedido);
