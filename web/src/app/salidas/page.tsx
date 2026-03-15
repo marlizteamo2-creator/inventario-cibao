@@ -6,10 +6,11 @@ import useRequireAuth from "@/hooks/useRequireAuth";
 import { useAuth } from "@/context/AuthContext";
 import {
   createSalida,
+  deleteSalida,
   fetchProducts,
   fetchSalidas,
   fetchSalidaStatuses,
-  updateSalida,
+  updateSalida
 } from "@/lib/api";
 import { Product, Salida, SalidaStatus } from "@/types";
 import Input from "@/components/ui/Input";
@@ -72,6 +73,8 @@ export default function SalidasPage() {
   const [editEstado, setEditEstado] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Salida | null>(null);
 
   const showAlert = (text: string | null, variant: "info" | "success" | "error" = "info") => {
     setMessage(text);
@@ -181,6 +184,7 @@ export default function SalidasPage() {
   };
 
   const canCreate = role === "Administrador" || role === "Vendedor";
+  const canDelete = role === "Administrador";
 
   const trimmedTicketFilter = ticketFilter.trim();
   const ticketFilterLower = trimmedTicketFilter.toLowerCase();
@@ -213,6 +217,30 @@ export default function SalidasPage() {
     [salidas, filterEstado, ticketFilterLower, ticketDigits]
   );
 
+  const renderActions = (salida: Salida) => {
+    if (!canCreate && !canDelete) {
+      return "—";
+    }
+    return (
+      <div className="flex flex-wrap gap-2">
+        {canCreate && (
+          <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => openEditSalida(salida)}>
+            Editar
+          </Button>
+        )}
+        {canDelete && (
+          <Button
+            variant="subtle"
+            className="px-3 py-1 text-xs border border-rose-200 text-rose-600"
+            onClick={() => handleDeleteRequest(salida)}
+          >
+            Eliminar
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   const recentRows = filteredSalidas.slice(0, 10).map((s) => {
     const ticketSequence = formatTicketSequence(s);
     return [
@@ -224,17 +252,7 @@ export default function SalidasPage() {
       s.estado,
       formatTipoVenta(s.tipo_venta ?? s.tipoVenta),
       `RD$ ${currencyFormatter.format(s.total)}`,
-      canCreate ? (
-        <Button
-          variant="subtle"
-          className="px-3 py-1 text-xs"
-          onClick={() => openEditSalida(s)}
-        >
-          Editar
-        </Button>
-      ) : (
-        "—"
-      ),
+      renderActions(s)
     ];
   });
 
@@ -303,6 +321,33 @@ export default function SalidasPage() {
       showAlert((error as Error).message, "error");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteRequest = (salida: Salida) => {
+    setDeleteTarget(salida);
+  };
+
+  const cancelDeleteSalida = () => {
+    if (deletingId) {
+      return;
+    }
+    setDeleteTarget(null);
+  };
+
+  const confirmDeleteSalida = async () => {
+    if (!token || !deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    try {
+      await deleteSalida(token, deleteTarget.id);
+      showAlert("Salida eliminada correctamente", "success");
+      const updated = await fetchSalidas(token);
+      setSalidas(updated);
+      setDeleteTarget(null);
+    } catch (error) {
+      showAlert((error as Error).message, "error");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -654,6 +699,65 @@ export default function SalidasPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-rose-400">Eliminar salida</p>
+                <h3 className="text-lg font-semibold text-slate-900">{deleteTarget.ticket}</h3>
+                <p className="text-xs text-slate-500">{deleteTarget.vendedor}</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:text-slate-700"
+                onClick={cancelDeleteSalida}
+                disabled={Boolean(deletingId)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <p>Revisa la información antes de eliminar esta salida. El stock se revertirá automáticamente.</p>
+              <ul className="space-y-2 rounded-2xl bg-slate-50 px-4 py-3">
+                <li>
+                  <span className="font-semibold text-slate-800">Ticket:</span> {deleteTarget.ticket}
+                  {formatTicketSequence(deleteTarget) && (
+                    <span className="text-xs text-slate-500"> ({formatTicketSequence(deleteTarget)})</span>
+                  )}
+                </li>
+                <li>
+                  <span className="font-semibold text-slate-800">Responsable:</span> {deleteTarget.vendedor}
+                </li>
+                <li>
+                  <span className="font-semibold text-slate-800">Estado:</span> {deleteTarget.estado}
+                </li>
+                <li>
+                  <span className="font-semibold text-slate-800">Tipo de venta:</span>{" "}
+                  {formatTipoVenta(deleteTarget.tipo_venta ?? deleteTarget.tipoVenta)}
+                </li>
+                <li>
+                  <span className="font-semibold text-slate-800">Monto:</span> RD$ {currencyFormatter.format(deleteTarget.total)}
+                </li>
+              </ul>
+              <p className="text-xs text-rose-500">Esta acción no se puede deshacer.</p>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="subtle" className="border border-slate-200" onClick={cancelDeleteSalida} disabled={Boolean(deletingId)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                className="bg-rose-500 text-white hover:bg-rose-600"
+                onClick={confirmDeleteSalida}
+                disabled={Boolean(deletingId)}
+              >
+                {deletingId ? "Eliminando..." : "Eliminar salida"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </AdminLayout>

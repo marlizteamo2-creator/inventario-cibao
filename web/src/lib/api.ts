@@ -374,6 +374,13 @@ export async function updateSalida(
   });
 }
 
+export async function deleteSalida(token: string, id: string) {
+  return apiFetch<void>(`/salidas/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
 export async function fetchSalidaStatuses(token: string) {
   return apiFetch<SalidaStatus[]>("/salida-statuses", {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
