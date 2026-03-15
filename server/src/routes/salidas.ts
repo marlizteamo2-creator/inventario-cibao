@@ -466,6 +466,64 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
   }
 });
 
+salidasRouter.delete("/:id", requireAuth(["Administrador"]), async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params ?? {};
+  if (!id) {
+    return res.status(400).json({ message: "ID requerido" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const saleResult = await client.query<{ id_vendedor: string }>(
+      `SELECT id_vendedor FROM salidas_alm WHERE id_salida = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!saleResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Salida no encontrada" });
+    }
+
+    const { rows: detailRows } = await client.query<{ id_producto: string | null; cantidad: number }>(
+      `SELECT id_producto, cantidad FROM detalle_salidas WHERE id_salida = $1`,
+      [id]
+    );
+
+    for (const detail of detailRows) {
+      if (!detail.id_producto) {
+        continue;
+      }
+      const productResult = await client.query<{ stock_actual: number }>(
+        `SELECT stock_actual FROM productos WHERE id_producto = $1 FOR UPDATE`,
+        [detail.id_producto]
+      );
+      if (!productResult.rowCount) {
+        continue;
+      }
+      const stockActual = Number(productResult.rows[0].stock_actual ?? 0);
+      const nuevoStock = stockActual + Number(detail.cantidad ?? 0);
+      await client.query(
+        `UPDATE productos SET stock_actual = $1, ultima_fecha_movimiento = NOW() WHERE id_producto = $2`,
+        [nuevoStock, detail.id_producto]
+      );
+    }
+
+    await client.query(`DELETE FROM movimientos_inv WHERE id_salida = $1`, [id]);
+    await client.query(`DELETE FROM detalle_salidas WHERE id_salida = $1`, [id]);
+    await client.query(`DELETE FROM salidas_alm WHERE id_salida = $1`, [id]);
+
+    await client.query("COMMIT");
+
+    res.json({ message: "Salida eliminada correctamente" });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error eliminando salida", error);
+    res.status(500).json({ message: "No se pudo eliminar la salida" });
+  } finally {
+    client.release();
+  }
+});
+
 /**
  * @openapi
  * /salidas:
