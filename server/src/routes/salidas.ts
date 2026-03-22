@@ -3,7 +3,8 @@ import type { Response } from "express";
 import type { PoolClient } from "pg";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 import { pool, query } from "../db/pool";
-import { sendSaleNotificationEmail } from "../services/mailer";
+import { sendSaleNotificationEmail, sendVendorSaleCreatedEmail, sendVendorSaleStatusEmail } from "../services/mailer";
+import { getAdminEmails, getUserFullName } from "../services/userDirectory";
 
 const salidasRouter = express.Router();
 const allowedRoles = ["Administrador", "Vendedor"];
@@ -50,26 +51,6 @@ const getActiveStates = async () => {
   return rows.map((row) => row.nombre);
 };
 
-const getAdminEmails = async () => {
-  const { rows } = await query(
-    `SELECT u.email
-     FROM usuarios u
-     INNER JOIN roles r ON r.id_rol = u.id_rol
-     WHERE r.nombre_rol = 'Administrador' AND u.activo = true`
-  );
-  return rows.map((row) => row.email as string).filter(Boolean);
-};
-
-const getUserFullName = async (userId: string) => {
-  const { rows } = await query(`SELECT nombre, apellido FROM usuarios WHERE id_usuario = $1 LIMIT 1`, [userId]);
-  if (!rows.length) {
-    return null;
-  }
-  const nombre = rows[0].nombre ?? "";
-  const apellido = rows[0].apellido ?? "";
-  return `${nombre} ${apellido}`.trim() || nombre || apellido || null;
-};
-
 type SaleNotificationData = {
   ticket: string;
   total: number;
@@ -93,6 +74,83 @@ const notifyAdminsOfSale = async (data: SaleNotificationData) => {
   } catch (error) {
     console.error("No se pudo notificar a administradores sobre la salida", error);
   }
+};
+
+const notifyVendorOfNewSale = async (email: string | null | undefined, data: SaleNotificationData) => {
+  if (!email) {
+    return;
+  }
+  try {
+    await sendVendorSaleCreatedEmail({
+      to: email,
+      ...data
+    });
+  } catch (error) {
+    console.error(`No se pudo notificar al vendedor ${email} sobre la salida`, error);
+  }
+};
+
+const notifyVendorOfSaleStatus = async (email: string | null | undefined, data: SaleNotificationData) => {
+  if (!email) {
+    return;
+  }
+  try {
+    await sendVendorSaleStatusEmail({
+      to: email,
+      ...data
+    });
+  } catch (error) {
+    console.error(`No se pudo notificar al vendedor ${email} sobre la actualización de salida`, error);
+  }
+};
+
+const fetchSaleEmailData = async (salidaId: string) => {
+  const { rows } = await query(
+    `SELECT s.ticket,
+            s.total,
+            s.estado,
+            s.tipo_venta,
+            s.fecha_salida,
+            u.nombre,
+            u.apellido,
+            u.email
+     FROM salidas_alm s
+     INNER JOIN usuarios u ON u.id_usuario = s.id_vendedor
+     WHERE s.id_salida = $1
+     LIMIT 1`,
+    [salidaId]
+  );
+  const sale = rows.at(0);
+  if (!sale) {
+    return null;
+  }
+  const { rows: detailRows } = await query(
+    `SELECT p.nombre,
+            d.cantidad,
+            d.precio_unitario,
+            d.subtotal
+     FROM detalle_salidas d
+     LEFT JOIN productos p ON p.id_producto = d.id_producto
+     WHERE d.id_salida = $1`,
+    [salidaId]
+  );
+  return {
+    email: sale.email as string | null,
+    data: {
+      ticket: sale.ticket as string,
+      total: Number(sale.total ?? 0),
+      estado: sale.estado as string,
+      tipoVenta: sale.tipo_venta as string,
+      vendedor: `${sale.nombre ?? ""} ${sale.apellido ?? ""}`.trim() || (sale.email as string),
+      fecha: sale.fecha_salida,
+      detalles: detailRows.map((detail) => ({
+        nombre: detail.nombre ?? "Producto",
+        cantidad: Number(detail.cantidad ?? 0),
+        precioUnitario: Number(detail.precio_unitario ?? 0),
+        subtotal: Number(detail.subtotal ?? 0)
+      }))
+    } satisfies SaleNotificationData
+  };
 };
 
 const normalizeEstadoForTicket = (estado: string) => {
@@ -282,6 +340,15 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
       fecha: salidaInsert.rows[0].fecha_salida,
       detalles: details
     });
+    void notifyVendorOfNewSale(tokenUser.email, {
+      ticket: ticketCode,
+      total,
+      estado,
+      tipoVenta,
+      vendedor: vendedorNombre,
+      fecha: salidaInsert.rows[0].fecha_salida,
+      detalles: details
+    });
 
     return res.status(201).json({
       id: salidaId,
@@ -332,6 +399,7 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
     const params: Array<any> = [];
     let nextTicketNumber: number | null = null;
     let nextTicketCode: string | null = null;
+    let estadoChanged = false;
 
     if (estado !== undefined) {
       const estadosDisponibles = await getActiveStates();
@@ -342,6 +410,7 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
       updates.push(`estado = $${updates.length + 1}`);
       params.push(estado);
       if (estado !== currentEstado) {
+        estadoChanged = true;
         const ticketData = await assignTicketData(estado, client);
         nextTicketNumber = ticketData.ticketNumber;
         nextTicketCode = ticketData.ticketCode;
@@ -376,6 +445,13 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
 
     await client.query("COMMIT");
 
+    if (estadoChanged) {
+      const result = await fetchSaleEmailData(id);
+      if (result) {
+        void notifyVendorOfSaleStatus(result.email, result.data);
+      }
+    }
+
     res.json({
       message: "Salida actualizada",
       ticket: nextTicketCode ?? undefined,
@@ -385,6 +461,64 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
     await client.query("ROLLBACK");
     console.error("Error actualizando salida", error);
     res.status(500).json({ message: "Error interno" });
+  } finally {
+    client.release();
+  }
+});
+
+salidasRouter.delete("/:id", requireAuth(["Administrador"]), async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params ?? {};
+  if (!id) {
+    return res.status(400).json({ message: "ID requerido" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const saleResult = await client.query<{ id_vendedor: string }>(
+      `SELECT id_vendedor FROM salidas_alm WHERE id_salida = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!saleResult.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Salida no encontrada" });
+    }
+
+    const { rows: detailRows } = await client.query<{ id_producto: string | null; cantidad: number }>(
+      `SELECT id_producto, cantidad FROM detalle_salidas WHERE id_salida = $1`,
+      [id]
+    );
+
+    for (const detail of detailRows) {
+      if (!detail.id_producto) {
+        continue;
+      }
+      const productResult = await client.query<{ stock_actual: number }>(
+        `SELECT stock_actual FROM productos WHERE id_producto = $1 FOR UPDATE`,
+        [detail.id_producto]
+      );
+      if (!productResult.rowCount) {
+        continue;
+      }
+      const stockActual = Number(productResult.rows[0].stock_actual ?? 0);
+      const nuevoStock = stockActual + Number(detail.cantidad ?? 0);
+      await client.query(
+        `UPDATE productos SET stock_actual = $1, ultima_fecha_movimiento = NOW() WHERE id_producto = $2`,
+        [nuevoStock, detail.id_producto]
+      );
+    }
+
+    await client.query(`DELETE FROM movimientos_inv WHERE id_salida = $1`, [id]);
+    await client.query(`DELETE FROM detalle_salidas WHERE id_salida = $1`, [id]);
+    await client.query(`DELETE FROM salidas_alm WHERE id_salida = $1`, [id]);
+
+    await client.query("COMMIT");
+
+    res.json({ message: "Salida eliminada correctamente" });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error eliminando salida", error);
+    res.status(500).json({ message: "No se pudo eliminar la salida" });
   } finally {
     client.release();
   }
@@ -526,10 +660,80 @@ const buildWorkbookDocument = (worksheets: string[]) => `<?xml version="1.0"?>
  ${worksheets.join("\n")}
 </Workbook>`;
 
+const padMonth = (value: number) => value.toString().padStart(2, "0");
+const sanitizeWorksheetName = (value: string) => value.replace(/[\\\/?*\[\]:]/g, "-").slice(0, 31);
+const capitalize = (value: string) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "");
+
+const formatMonthLabel = (date: Date) => {
+  const label = date.toLocaleString("es-DO", { month: "long", year: "numeric" });
+  return capitalize(label);
+};
+
+const formatMonthName = (date: Date) => {
+  const label = date.toLocaleString("es-DO", { month: "long" });
+  return capitalize(label);
+};
+
+type MonthBucket = {
+  key: string;
+  label: string;
+  worksheetName: string;
+  monthIndex: number;
+  year: number;
+};
+
+const buildMonthBuckets = (startDate: Date, endDate: Date, prefix: string): MonthBucket[] => {
+  const buckets: MonthBucket[] = [];
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const limit = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+  while (cursor <= limit) {
+    const year = cursor.getFullYear();
+    const monthIndex = cursor.getMonth();
+    const key = `${year}-${padMonth(monthIndex + 1)}`;
+    const monthName = formatMonthName(cursor);
+    buckets.push({
+      key,
+      label: formatMonthLabel(cursor),
+      worksheetName: `${prefix} ${monthName}-${year}`,
+      monthIndex,
+      year
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return buckets;
+};
+
+const toDateOrNull = (value: Date | string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const groupRowsByMonth = <T,>(rows: T[], getDate: (row: T) => Date | null) => {
+  const map = new Map<string, T[]>();
+  rows.forEach((row) => {
+    const date = getDate(row);
+    if (!date) {
+      return;
+    }
+    const key = `${date.getFullYear()}-${padMonth(date.getMonth() + 1)}`;
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key)!.push(row);
+  });
+  return map;
+};
+
 const buildSalidasWorksheet = (
   rows: Array<{ ticket: string; fecha_salida: Date; estado: string; tipo_venta: string; total: number; vendedor: string; productos: string }>,
   total: number,
-  rangeLabel: string
+  periodLabel: string,
+  worksheetName: string
 ) => {
   const formatCurrency = (value: number) =>
     `RD$ ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
@@ -537,7 +741,7 @@ const buildSalidasWorksheet = (
     <Row>
       <Cell><Data ss:Type="String">Ticket</Data></Cell>
       <Cell><Data ss:Type="String">Fecha</Data></Cell>
-      <Cell><Data ss:Type="String">Vendedor</Data></Cell>
+      <Cell><Data ss:Type="String">Responsable</Data></Cell>
       <Cell><Data ss:Type="String">Productos</Data></Cell>
       <Cell><Data ss:Type="String">Estado</Data></Cell>
       <Cell><Data ss:Type="String">Tipo venta</Data></Cell>
@@ -559,7 +763,7 @@ const buildSalidasWorksheet = (
     </Row>`
         )
         .join("")
-    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin salidas registradas para este rango.</Data></Cell></Row>`;
+    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin salidas registradas en este período.</Data></Cell></Row>`;
 
   const totalRow = `
     <Row>
@@ -567,15 +771,21 @@ const buildSalidasWorksheet = (
       <Cell ss:MergeAcross="5"><Data ss:Type="String">${escapeXml(formatCurrency(total))}</Data></Cell>
     </Row>`;
 
-  return `<Worksheet ss:Name="Salidas">
+  const dataRowCount = rows.length > 0 ? rows.length : 1;
+  const headerRowIndex = 2;
+  const endRow = headerRowIndex + dataRowCount;
+  const autoFilterRange = `R${headerRowIndex}C1:R${endRow}C7`;
+
+  return `<Worksheet ss:Name="${escapeXml(sanitizeWorksheetName(worksheetName))}">
   <Table>
     <Row>
-      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de salidas (${escapeXml(rangeLabel)})</Data></Cell>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de salidas (${escapeXml(periodLabel)})</Data></Cell>
     </Row>
     ${headerRow}
     ${dataRows}
     ${totalRow}
   </Table>
+  <x:AutoFilter x:Range="${autoFilterRange}" />
  </Worksheet>`;
 };
 
@@ -590,7 +800,8 @@ const buildEntradasWorksheet = (
     observacion: string | null;
   }>,
   totalCantidad: number,
-  rangeLabel: string
+  periodLabel: string,
+  worksheetName: string
 ) => {
   const headerRow = `
     <Row>
@@ -599,7 +810,7 @@ const buildEntradasWorksheet = (
       <Cell><Data ss:Type="String">Cantidad</Data></Cell>
       <Cell><Data ss:Type="String">Stock anterior</Data></Cell>
       <Cell><Data ss:Type="String">Stock nuevo</Data></Cell>
-      <Cell><Data ss:Type="String">Registrado por</Data></Cell>
+      <Cell><Data ss:Type="String">Responsable</Data></Cell>
       <Cell><Data ss:Type="String">Observación</Data></Cell>
     </Row>`;
 
@@ -618,7 +829,7 @@ const buildEntradasWorksheet = (
     </Row>`
         )
         .join("")
-    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin entradas registradas para este rango.</Data></Cell></Row>`;
+    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin entradas registradas en este período.</Data></Cell></Row>`;
 
   const totalRow = `
     <Row>
@@ -626,15 +837,21 @@ const buildEntradasWorksheet = (
       <Cell ss:MergeAcross="5"><Data ss:Type="Number">${totalCantidad}</Data></Cell>
     </Row>`;
 
-  return `<Worksheet ss:Name="Entradas">
+  const dataRowCount = rows.length > 0 ? rows.length : 1;
+  const headerRowIndex = 2;
+  const endRow = headerRowIndex + dataRowCount;
+  const autoFilterRange = `R${headerRowIndex}C1:R${endRow}C7`;
+
+  return `<Worksheet ss:Name="${escapeXml(sanitizeWorksheetName(worksheetName))}">
   <Table>
     <Row>
-      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de entradas (${escapeXml(rangeLabel)})</Data></Cell>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de entradas (${escapeXml(periodLabel)})</Data></Cell>
     </Row>
     ${headerRow}
     ${dataRows}
     ${totalRow}
   </Table>
+  <x:AutoFilter x:Range="${autoFilterRange}" />
  </Worksheet>`;
 };
 
@@ -665,8 +882,8 @@ const buildEntradasWorksheet = (
  *         required: false
  *         schema:
  *           type: string
- *           enum: [salidas, entradas, todo]
- *         description: Define si se exportan solo salidas, solo entradas o ambos en hojas separadas. Por defecto salidas.
+ *           enum: [salidas, entradas]
+ *         description: Define si se exportan salidas o entradas en hojas mensuales. Por defecto salidas.
  *     responses:
  *       200:
  *         description: Archivo Excel generado
@@ -697,25 +914,14 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
     endDate.setHours(23, 59, 59, 999);
 
     const scope = (scopeParam ?? "salidas").toString().toLowerCase();
-    const validScopes = ["salidas", "entradas", "todo"];
+    const validScopes = ["salidas", "entradas"];
     if (!validScopes.includes(scope)) {
-      return res.status(400).json({ message: "El parámetro scope debe ser salidas, entradas o todo." });
+      return res.status(400).json({ message: "El parámetro scope debe ser salidas o entradas." });
     }
 
-    const includeSalidas = scope === "salidas" || scope === "todo";
-    const includeEntradas = scope === "entradas" || scope === "todo";
+    const includeSalidas = scope === "salidas";
+    const includeEntradas = scope === "entradas";
     const worksheets: string[] = [];
-    const rangeLabel = `${startDate.toLocaleDateString("es-DO")} - ${endDate.toLocaleDateString("es-DO")}`;
-
-    let salidasRows: Array<{
-      ticket: string;
-      fecha_salida: Date;
-      estado: string;
-      tipo_venta: string;
-      total: number;
-      vendedor: string;
-      productos: string;
-    }> = [];
 
     if (includeSalidas) {
       const { rows } = await query(
@@ -739,29 +945,34 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
         [startDate, endDate]
       );
 
-      salidasRows = rows as typeof salidasRows;
+      const salidasRows = rows as Array<{
+        ticket: string;
+        fecha_salida: Date;
+        estado: string;
+        tipo_venta: string;
+        total: number;
+        vendedor: string;
+        productos: string;
+      }>;
+
       if (scope === "salidas" && !salidasRows.length) {
         return res.status(400).json({ message: "No se encontraron salidas en el rango seleccionado." });
       }
-      const total = salidasRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-      worksheets.push(
-        buildSalidasWorksheet(
-          salidasRows,
-          total,
-          rangeLabel
-        )
-      );
+      const rowsByMonth = groupRowsByMonth(salidasRows, (row) => toDateOrNull(row.fecha_salida));
+      const buckets = buildMonthBuckets(startDate, endDate, "Salidas");
+      buckets.forEach((bucket) => {
+        const monthRows = rowsByMonth.get(bucket.key) ?? [];
+        const total = monthRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+        worksheets.push(
+          buildSalidasWorksheet(
+            monthRows,
+            total,
+            bucket.label,
+            bucket.worksheetName
+          )
+        );
+      });
     }
-
-    let entradaRows: Array<{
-      producto: string;
-      fecha_movimiento: Date;
-      cantidad: number;
-      stock_anterior: number;
-      stock_nuevo: number;
-      usuario: string;
-      observacion: string | null;
-    }> = [];
 
     if (includeEntradas) {
       const { rows } = await query(
@@ -781,25 +992,36 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
         [startDate, endDate]
       );
 
-      entradaRows = rows as typeof entradaRows;
+      const entradaRows = rows as Array<{
+        producto: string;
+        fecha_movimiento: Date;
+        cantidad: number;
+        stock_anterior: number;
+        stock_nuevo: number;
+        usuario: string;
+        observacion: string | null;
+      }>;
+
       if (scope === "entradas" && !entradaRows.length) {
         return res.status(400).json({ message: "No se encontraron entradas en el rango seleccionado." });
       }
-      const totalCantidad = entradaRows.reduce((sum, row) => sum + Number(row.cantidad ?? 0), 0);
-      worksheets.push(
-        buildEntradasWorksheet(
-          entradaRows,
-          totalCantidad,
-          rangeLabel
-        )
-      );
+      const rowsByMonth = groupRowsByMonth(entradaRows, (row) => toDateOrNull(row.fecha_movimiento));
+      const buckets = buildMonthBuckets(startDate, endDate, "Entradas");
+      buckets.forEach((bucket) => {
+        const monthRows = rowsByMonth.get(bucket.key) ?? [];
+        const totalCantidad = monthRows.reduce((sum, row) => sum + Number(row.cantidad ?? 0), 0);
+        worksheets.push(
+          buildEntradasWorksheet(
+            monthRows,
+            totalCantidad,
+            bucket.label,
+            bucket.worksheetName
+          )
+        );
+      });
     }
 
-    if (scope === "todo" && !salidasRows.length && !entradaRows.length) {
-      return res.status(400).json({ message: "No se encontraron movimientos en el rango seleccionado." });
-    }
-
-    const fileNameSuffix = scope === "todo" ? "movimientos" : scope;
+    const fileNameSuffix = scope;
     const workbook = buildWorkbookDocument(worksheets);
     const fileName = `reporte_${fileNameSuffix}_${start}_${end}.xls`;
 

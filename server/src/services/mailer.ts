@@ -97,8 +97,7 @@ export const sendCredentialsEmail = async ({ to, name, password, role, senderEma
   }
 };
 
-type SaleNotificationPayload = {
-  recipients: string[];
+type SaleEmailDetails = {
   ticket: string;
   total: number;
   estado: string;
@@ -108,10 +107,23 @@ type SaleNotificationPayload = {
   detalles: Array<{ nombre: string; cantidad: number; precioUnitario: number; subtotal: number }>;
 };
 
+type SaleNotificationPayload = SaleEmailDetails & {
+  recipients: string[];
+};
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" }).format(value);
 
-const buildSaleTemplate = (payload: SaleNotificationPayload) => {
+const buildSaleTemplate = (
+  payload: SaleEmailDetails,
+  options?: { heading?: string; intro?: string; footerNote?: string }
+) => {
+  const heading = options?.heading ?? "Nueva salida registrada";
+  const intro =
+    options?.intro ?? `Se registró una nueva salida con ticket <strong>${payload.ticket}</strong>.`;
+  const footerNote =
+    options?.footerNote ??
+    "Este mensaje se envió automáticamente para mantener al equipo al tanto de las ventas registradas.";
   const formattedDate = new Date(payload.fecha).toLocaleString("es-DO");
   const detailRows = payload.detalles
     .map(
@@ -134,12 +146,12 @@ const buildSaleTemplate = (payload: SaleNotificationPayload) => {
             <tr>
               <td style="background-color:#0b1540; padding:32px;">
                 <p style="margin:0; text-transform:uppercase; letter-spacing:4px; color:#60a5fa; font-size:12px;">Inventario Cibao</p>
-                <h1 style="margin-top:12px; color:#ffffff; font-size:24px;">Nueva salida registrada</h1>
+                <h1 style="margin-top:12px; color:#ffffff; font-size:24px;">${heading}</h1>
               </td>
             </tr>
             <tr>
               <td style="padding:32px; color:#0f172a;">
-                <p style="margin:0 0 16px 0; font-size:15px;">Se registró una nueva salida con ticket <strong>${payload.ticket}</strong>.</p>
+                <p style="margin:0 0 16px 0; font-size:15px;">${intro}</p>
                 <ul style="list-style:none; padding:0; margin:0 0 24px 0; color:#475569; font-size:14px;">
                   <li><strong>Vendedor:</strong> ${payload.vendedor}</li>
                   <li><strong>Fecha:</strong> ${formattedDate}</li>
@@ -160,7 +172,7 @@ const buildSaleTemplate = (payload: SaleNotificationPayload) => {
                     ${detailRows}
                   </tbody>
                 </table>
-                <p style="margin-top:24px; font-size:13px; color:#94a3b8;">Este mensaje se envió automáticamente para mantener al equipo al tanto de las ventas registradas.</p>
+                <p style="margin-top:24px; font-size:13px; color:#94a3b8;">${footerNote}</p>
               </td>
             </tr>
           </table>
@@ -190,6 +202,117 @@ export const sendSaleNotificationEmail = async (payload: SaleNotificationPayload
     return true;
   } catch (error) {
     console.error("No se pudo enviar la alerta de salida", error);
+    return false;
+  }
+};
+
+type VendorSaleEmailPayload = SaleEmailDetails & {
+  to: string;
+};
+
+const sendVendorSaleEmail = async (
+  payload: VendorSaleEmailPayload,
+  options: { subject: string; heading: string; intro: string; footerNote?: string }
+) => {
+  if (!transporter || !payload.to) {
+    return false;
+  }
+
+  const html = buildSaleTemplate(payload, options);
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: payload.to,
+      subject: options.subject,
+      html
+    });
+    return true;
+  } catch (error) {
+    console.error(`No se pudo enviar correo al vendedor ${payload.to}`, error);
+    return false;
+  }
+};
+
+export const sendVendorSaleCreatedEmail = async (payload: VendorSaleEmailPayload) => {
+  return sendVendorSaleEmail(payload, {
+    subject: `Confirmación de salida ${payload.ticket}`,
+    heading: "Tu salida fue registrada",
+    intro: `Hola ${payload.vendedor}, tu salida con ticket <strong>${payload.ticket}</strong> fue registrada correctamente.`,
+    footerNote: "Puedes consultar el detalle completo ingresando a Inventario Cibao."
+  });
+};
+
+export const sendVendorSaleStatusEmail = async (payload: VendorSaleEmailPayload) => {
+  return sendVendorSaleEmail(payload, {
+    subject: `Actualización de salida ${payload.ticket}`,
+    heading: "Estado de tu salida actualizado",
+    intro: `La salida con ticket <strong>${payload.ticket}</strong> ahora se encuentra en estado <strong>${payload.estado}</strong>.`,
+    footerNote: "Este mensaje solo se envía al responsable de la salida."
+  });
+};
+
+type EntryNotificationPayload = {
+  recipients: string[];
+  producto: string;
+  cantidad: number;
+  pedidoId: string;
+  responsable: string;
+  fecha: Date | string;
+};
+
+const buildEntryTemplate = (payload: EntryNotificationPayload) => {
+  const formattedDate = new Date(payload.fecha).toLocaleString("es-DO");
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-family:'Helvetica Neue',Arial,sans-serif;background-color:#f5f7fb;padding:24px;">
+      <tr>
+        <td>
+          <table width="600" cellpadding="0" cellspacing="0" style="margin:0 auto;background-color:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 12px 35px rgba(15,23,42,0.12);">
+            <tr>
+              <td style="background-color:#0b1540;padding:28px;">
+                <p style="margin:0;text-transform:uppercase;letter-spacing:4px;color:#60a5fa;font-size:12px;">Inventario Cibao</p>
+                <h1 style="margin-top:12px;color:#ffffff;font-size:24px;">Nueva entrada registrada</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;color:#0f172a;">
+                <p style="margin:0 0 12px 0;font-size:15px;">
+                  Se registró una entrada del pedido <strong>#${payload.pedidoId}</strong>.
+                </p>
+                <ul style="list-style:none;padding:0;margin:0 0 18px 0;color:#475569;font-size:14px;">
+                  <li><strong>Producto:</strong> ${payload.producto}</li>
+                  <li><strong>Cantidad:</strong> ${payload.cantidad}</li>
+                  <li><strong>Responsable:</strong> ${payload.responsable}</li>
+                  <li><strong>Fecha:</strong> ${formattedDate}</li>
+                </ul>
+                <p style="font-size:13px;color:#94a3b8;margin-top:16px;">
+                  Este mensaje se envió automáticamente para mantener a los administradores informados sobre reposiciones.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+};
+
+export const sendEntryNotificationEmail = async (payload: EntryNotificationPayload) => {
+  if (!transporter || !payload.recipients.length) {
+    return false;
+  }
+  const [primary, ...rest] = payload.recipients;
+  const html = buildEntryTemplate(payload);
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: primary,
+      bcc: rest.length ? rest : undefined,
+      subject: `Entrada registrada - Pedido #${payload.pedidoId}`,
+      html
+    });
+    return true;
+  } catch (error) {
+    console.error("No se pudo enviar el correo de entrada a administradores", error);
     return false;
   }
 };
